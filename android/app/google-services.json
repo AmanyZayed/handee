@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "845205637188",
+    "project_id": "handee-app-3fcaf",
+    "storage_bucket": "handee-app-3fcaf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:845205637188:android:971365580fe72ef3e01411",
+        "android_client_info": {
+          "package_name": "com.example.handee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzU6M3Y3HDXfks8zOE7F7GNagZGp4FNcw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
