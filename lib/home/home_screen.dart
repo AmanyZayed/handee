@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../camera_screen.dart';
 import '../pages/store_page.dart';
 import '../pages/history_page.dart';
 import '../profile/profile_screen.dart';
+import '../video_test_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +18,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _picker = ImagePicker();
   int _currentIndex = 0;
 
+  String aiResult = "No AI yet";
+
   Future<void> _openCamera() async {
     await _picker.pickImage(source: ImageSource.camera);
   }
@@ -24,19 +28,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 244, 243, 244),
-
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
           children: [
-            _HomeMainContent(openCamera: _openCamera),
+            const _HomeMainContent(),
             const StorePage(),
             const HistoryPage(),
             const ProfileScreen(),
           ],
         ),
       ),
-
       bottomNavigationBar: Container(
         height: 70,
         decoration: const BoxDecoration(
@@ -46,25 +48,29 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _NavIcon(
-                icon: Icons.translate,
-                index: 0,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.translate,
+              index: 0,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.shopping_cart,
-                index: 1,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.shopping_cart,
+              index: 1,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.history,
-                index: 2,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.history,
+              index: 2,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.person,
-                index: 3,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.person,
+              index: 3,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
           ],
         ),
       ),
@@ -78,22 +84,37 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// =======================================================
+// =========================
 // Home Main Content
-// =======================================================
+// =========================
 
-class _HomeMainContent extends StatelessWidget {
-  final VoidCallback openCamera;
+class _HomeMainContent extends StatefulWidget {
+  const _HomeMainContent({super.key});
 
-  const _HomeMainContent({required this.openCamera});
+  @override
+  State<_HomeMainContent> createState() => _HomeMainContentState();
+}
+
+class _HomeMainContentState extends State<_HomeMainContent> {
+  final TextEditingController _textController = TextEditingController();
+
+  void _playTypedWord() {
+    final word = _textController.text.toLowerCase().trim();
+
+    if (word.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoTestPage(word: word),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // =========================
-        // 1️⃣ Character Area
-        // =========================
         Expanded(
           flex: 6,
           child: Container(
@@ -111,11 +132,11 @@ class _HomeMainContent extends StatelessWidget {
               children: [
                 Center(
                   child: Container(
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color.fromARGB(66, 255, 253, 253),
+                          color: Color.fromARGB(66, 255, 253, 253),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -129,14 +150,54 @@ class _HomeMainContent extends StatelessWidget {
                   ),
                 ),
 
+                // 🔥 SIDE ICONS
                 Positioned(
                   left: 16,
                   bottom: 40,
                   child: Column(
-                    children: const [
-                      _SideIcon(icon: Icons.refresh),
-                      SizedBox(height: 12),
-                      _SideIcon(icon: Icons.language),
+                    children: [
+                      // 🤖 AI Camera
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CameraScreen(),
+                            ),
+                          );
+                        },
+                        child: const _SideIcon(icon: Icons.smart_toy),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // 🌐 ASL Translator
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/asl-translator');
+                        },
+                        child: const _SideIcon(icon: Icons.language),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // 🎤 Speech to Text
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/speech-to-text');
+                        },
+                        child: const _SideIcon(icon: Icons.mic),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // 🔊 Text to Speech
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/text-to-speech');
+                        },
+                        child: const _SideIcon(icon: Icons.volume_up),
+                      ),
                     ],
                   ),
                 ),
@@ -145,14 +206,10 @@ class _HomeMainContent extends StatelessWidget {
           ),
         ),
 
-        // =========================
-        // 2️⃣ Input Area
-        // =========================
         Expanded(
           flex: 2,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
@@ -163,12 +220,16 @@ class _HomeMainContent extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    controller: _textController,
+                    onSubmitted: (_) => _playTypedWord(),
                     decoration: InputDecoration(
-                      hintText: 'Type to translate...',
+                      hintText: 'Type word (e.g. hello)',
                       filled: true,
                       fillColor: const Color(0xFFF2F2F2),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
@@ -176,24 +237,44 @@ class _HomeMainContent extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 12),
 
+                // 🎬 PLAY BUTTON (NEW)
                 GestureDetector(
-                  onTap: openCamera,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                  onTap: _playTypedWord,
+                  child: Container(
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      color:  Color.fromARGB(255, 21, 38, 107),
+                      color: Colors.green,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color:  Color.fromARGB(255, 21, 38, 107)
-                              .withOpacity(0.4),
-                          blurRadius: 12,
-                        ),
-                      ],
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // 📷 CAMERA (UNCHANGED)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CameraScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 21, 38, 107),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
                       Icons.camera_alt,
@@ -237,9 +318,7 @@ class _NavIcon extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.2)
-              : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -253,7 +332,7 @@ class _NavIcon extends StatelessWidget {
 }
 
 // =========================
-// Side Small Icon
+// Side Icon
 // =========================
 
 class _SideIcon extends StatelessWidget {
@@ -272,7 +351,7 @@ class _SideIcon extends StatelessWidget {
       ),
       child: Icon(
         icon,
-        color:  Color.fromARGB(255, 21, 38, 107),
+        color: const Color.fromARGB(255, 21, 38, 107),
       ),
     );
   }
