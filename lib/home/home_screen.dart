@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
+import '../asl/asl_camera_screen.dart';
 import '../pages/store_page.dart';
 import '../pages/history_page.dart';
 import '../profile/profile_screen.dart';
@@ -13,18 +13,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final ImagePicker _picker = ImagePicker();
   int _currentIndex = 0;
 
   Future<void> _openCamera() async {
-    await _picker.pickImage(source: ImageSource.camera);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AslCameraScreen(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 244, 243, 244),
-
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
@@ -36,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-
       bottomNavigationBar: Container(
         height: 70,
         decoration: const BoxDecoration(
@@ -46,25 +48,29 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _NavIcon(
-                icon: Icons.translate,
-                index: 0,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.translate,
+              index: 0,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.shopping_cart,
-                index: 1,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.shopping_cart,
+              index: 1,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.history,
-                index: 2,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.history,
+              index: 2,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
             _NavIcon(
-                icon: Icons.person,
-                index: 3,
-                currentIndex: _currentIndex,
-                onTap: _onNavTap),
+              icon: Icons.person,
+              index: 3,
+              currentIndex: _currentIndex,
+              onTap: _onNavTap,
+            ),
           ],
         ),
       ),
@@ -128,7 +134,6 @@ class _HomeMainContent extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 Positioned(
                   left: 16,
                   bottom: 40,
@@ -151,8 +156,7 @@ class _HomeMainContent extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
@@ -167,8 +171,10 @@ class _HomeMainContent extends StatelessWidget {
                       hintText: 'Type to translate...',
                       filled: true,
                       fillColor: const Color(0xFFF2F2F2),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
@@ -177,7 +183,6 @@ class _HomeMainContent extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-
                 GestureDetector(
                   onTap: openCamera,
                   child: AnimatedContainer(
@@ -185,11 +190,11 @@ class _HomeMainContent extends StatelessWidget {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      color:  Color.fromARGB(255, 21, 38, 107),
+                      color: const Color.fromARGB(255, 21, 38, 107),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color:  Color.fromARGB(255, 21, 38, 107)
+                          color: const Color.fromARGB(255, 21, 38, 107)
                               .withOpacity(0.4),
                           blurRadius: 12,
                         ),
@@ -237,9 +242,8 @@ class _NavIcon extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.2)
-              : Colors.transparent,
+          color:
+              isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -272,7 +276,7 @@ class _SideIcon extends StatelessWidget {
       ),
       child: Icon(
         icon,
-        color:  Color.fromARGB(255, 21, 38, 107),
+        color: const Color.fromARGB(255, 21, 38, 107),
       ),
     );
   }
