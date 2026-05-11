@@ -19,6 +19,13 @@ class _VideoTestPageState extends State<VideoTestPage> {
   int currentIndex = 0;
   String? error;
 
+  final List<String> folders = [
+    'assets/signs_final_300',
+    'assets/signs_cutout',
+    'assets/signs_cropped',
+    'assets/signs',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -45,24 +52,36 @@ class _VideoTestPageState extends State<VideoTestPage> {
       _controller = null;
     });
 
-    final path = 'assets/signs_cropped/$word.mp4';
-    final controller = VideoPlayerController.asset(path);
-    _controller = controller;
+    bool loaded = false;
 
-    try {
-      await controller.initialize();
+    for (final folder in folders) {
+      final path = '$folder/$word.mp4';
+      final controller = VideoPlayerController.asset(path);
 
-      controller.addListener(() {
-        if (controller.value.isInitialized &&
-            controller.value.position >= controller.value.duration &&
-            !controller.value.isPlaying) {
-          _playNextVideo();
-        }
-      });
+      try {
+        await controller.initialize();
 
-      setState(() {});
-      controller.play();
-    } catch (e) {
+        _controller = controller;
+
+        controller.addListener(() {
+          if (controller.value.isInitialized &&
+              controller.value.position >= controller.value.duration &&
+              !controller.value.isPlaying) {
+            _playNextVideo();
+          }
+        });
+
+        setState(() {});
+        controller.play();
+
+        loaded = true;
+        break;
+      } catch (e) {
+        await controller.dispose();
+      }
+    }
+
+    if (!loaded) {
       missingWords.add(word);
       _playNextVideo();
     }
@@ -103,7 +122,6 @@ class _VideoTestPageState extends State<VideoTestPage> {
       ),
       body: Column(
         children: [
-          // 🔥 Missing words banner
           if (missingWords.isNotEmpty)
             Container(
               width: double.infinity,
@@ -118,8 +136,6 @@ class _VideoTestPageState extends State<VideoTestPage> {
                 ),
               ),
             ),
-
-          // 🎬 Video area
           Expanded(
             child: Center(
               child: error != null
