@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android local + generated build output
+/android/local.properties
+/android/build/
+buildlog.txt
+
+# Unity export caches and machine-specific paths
+/android/unityLibrary/UnityExport/.gradle/
+/android/unityLibrary/UnityExport/build/
+/android/unityLibrary/UnityExport/unityLibrary/.cxx/
+/android/unityLibrary/UnityExport/local.properties
