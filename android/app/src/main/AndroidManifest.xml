@@ -1,10 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <uses-feature
         android:name="android.hardware.camera.any"
-        android:required="false" />
+        android:required="true" />
 
     <application
         android:label="handee"
@@ -27,6 +28,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".unity.HandeeUnitySignActivity"
+            android:exported="false"
+            android:configChanges="fontScale|keyboard|keyboardHidden|locale|mnc|mcc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|touchscreen"
+            android:screenOrientation="fullSensor"
+            android:hardwareAccelerated="true"
+            android:theme="@style/HandeeUnitySignTheme"
+            android:launchMode="singleTop" />
 
         <meta-data
             android:name="flutterEmbedding"

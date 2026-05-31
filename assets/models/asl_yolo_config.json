@@ -1,0 +1,56 @@
+{
+  "input_size": 224,
+  "models": {
+    "full_combined": {
+      "file": "models/full_combined_best.pt",
+      "used_by": "app.py",
+      "description": "Digits 0-9 + letters A-Z + nothing + space (38 classes). train7 on asl_combined.",
+      "class_count": 38
+    },
+    "letters_digits": {
+      "file": "models/letters_digits_best.pt",
+      "used_by": "mediapipe_yolo_mode.py",
+      "description": "Digits + letters + del + nothing + space (39 classes). asl_letters_digits run.",
+      "class_count": 39
+    },
+    "letters_only": {
+      "file": "models/letters_only_best.pt",
+      "used_by": "optional — letters-only mode",
+      "description": "A-Z + del + nothing + space (29 classes). train3.",
+      "class_count": 29
+    }
+  },
+  "mobile_exports": {
+    "recommended": "exports/full_combined_best.tflite",
+    "alternates": [
+      "exports/full_combined_best.onnx",
+      "exports/letters_digits_best.tflite"
+    ]
+  },
+  "pipeline": {
+    "crop_margin": 0.35,
+    "min_crop_size_px": 80,
+    "crop_margin_tight_px": 20,
+    "stable_window": 8,
+    "stable_min_count": 4,
+    "mediapipe": {
+      "max_num_hands": 1,
+      "min_detection_confidence": 0.7,
+      "min_tracking_confidence": 0.7,
+      "min_detection_confidence_relaxed": 0.3,
+      "min_tracking_confidence_relaxed": 0.3
+    }
+  },
+  "thresholds": {
+    "digits": 0.35,
+    "letters": 0.6,
+    "both": 0.6
+  },
+  "classes": {
+    "full_combined": ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","nothing","space"],
+    "letters_digits": ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","del","nothing","space"],
+    "letters_only": ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","del","nothing","space"]
+  },
+  "digit_class_names": ["0","1","2","3","4","5","6","7","8","9"],
+  "letter_class_names": ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]
+}

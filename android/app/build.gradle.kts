@@ -27,10 +27,14 @@ android {
         applicationId = "com.example.handee"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            // Limit debug packaging to the connected physical device ABI to save disk.
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -43,12 +47,27 @@ android {
 }
 dependencies {
     implementation("com.google.mediapipe:tasks-vision:0.10.21")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 
     val cameraxVersion = "1.4.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
+
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.games:games-activity:3.0.5")
+    implementation(project(":unityLibrary"))
+    compileOnly(
+        files("../unityLibrary/UnityExport/unityLibrary/libs/unity-classes.jar"),
+    )
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("androidx.activity:activity:1.9.3")
+        force("androidx.activity:activity-ktx:1.9.3")
+    }
 }
 flutter {
     source = "../.."

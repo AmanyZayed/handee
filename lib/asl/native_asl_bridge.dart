@@ -17,6 +17,18 @@ class NativeAslBridge {
     return await _methodChannel.invokeMethod('stopRecognition');
   }
 
+  static Future<String> setRecognitionSettings({
+    required String pipeline,
+    required String classFilter,
+    double? confThreshold,
+  }) async {
+    return await _methodChannel.invokeMethod('setRecognitionSettings', {
+      'pipeline': pipeline,
+      'classFilter': classFilter,
+      if (confThreshold != null) 'confThreshold': confThreshold,
+    });
+  }
+
   static Stream<dynamic> get nativeStream {
     return _eventChannel.receiveBroadcastStream();
   }
