@@ -3,6 +3,7 @@ import com.android.build.gradle.LibraryExtension
 import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.io.File
 import java.util.Properties
 
 val localProperties = Properties()
@@ -33,15 +34,12 @@ allprojects {
     }
 }
 
-val newBuildDir: Directory =
-    rootProject.layout.buildDirectory
-        .dir("../../build")
-        .get()
-rootProject.layout.buildDirectory.value(newBuildDir)
+// Build on D: — C: is too small for Unity native-lib merges (~50MB+ .so files).
+val handeeAndroidBuildRoot = File("D:/HandeeBuild/handee-android").apply { mkdirs() }
+rootProject.layout.buildDirectory.set(handeeAndroidBuildRoot)
 
 subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
+    project.layout.buildDirectory.set(File(handeeAndroidBuildRoot, project.name))
 }
 
 tasks.register<Delete>("clean") {

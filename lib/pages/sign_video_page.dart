@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:handee/theme/app_fonts.dart';
 import 'package:video_player/video_player.dart';
+import '../theme/app_theme.dart';
 
-/// Sign video page (option 2) when the avatar cannot sign the word.
 class SignVideoPage extends StatefulWidget {
   final String word;
 
@@ -101,6 +102,11 @@ class _SignVideoPageState extends State<SignVideoPage> {
     }
   }
 
+  void _replayVideo() {
+    _controller?.seekTo(Duration.zero);
+    _controller?.play();
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -109,56 +115,201 @@ class _SignVideoPageState extends State<SignVideoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _words.isEmpty
-        ? widget.word
-        : '${_words[_currentIndex]} (${_currentIndex + 1}/${_words.length})';
+    final currentWord = _words.isEmpty ? widget.word : _words[_currentIndex];
+    final hasMultiple = _words.length > 1;
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 244, 243, 244),
+      backgroundColor: AppColors.ink,
       appBar: AppBar(
-        title: Text('Sign video — $title'),
-        backgroundColor: const Color.fromARGB(255, 21, 38, 107),
+        backgroundColor: AppColors.ink,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: Colors.white,
-        centerTitle: true,
+        title: Column(
+          children: [
+            Text(
+              currentWord.toUpperCase(),
+              style: AppFonts.spaceGrotesk(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            if (hasMultiple)
+              Text(
+                '${_currentIndex + 1} of ${_words.length}',
+                style: AppFonts.plusJakarta(
+                  fontSize: 11,
+                  color: const Color(0xFF7C8AC0),
+                ),
+              ),
+          ],
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white, size: 18),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          if (_controller != null && !_loading && _error == null)
+            IconButton(
+              icon: const Icon(Icons.replay_rounded, color: Colors.white),
+              tooltip: 'Replay',
+              onPressed: _replayVideo,
+            ),
+        ],
       ),
       body: Column(
         children: [
+          // ── Word progress bar (multi-word) ──────────────────────────────
+          if (hasMultiple)
+            Container(
+              color: AppColors.ink,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: List.generate(_words.length, (i) {
+                  return Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: i <= _currentIndex
+                            ? AppColors.electric
+                            : Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+          // ── Video area ──────────────────────────────────────────────────
           Expanded(
             child: Center(
               child: _loading
-                  ? const CircularProgressIndicator()
+                  ? SizedBox(
+                      width: 36, height: 36,
+                      child: CircularProgressIndicator(
+                        color: AppColors.electric,
+                        strokeWidth: 2.5,
+                      ),
+                    )
                   : _error != null
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                        )
+                      ? _ErrorState(error: _error!, word: widget.word)
                       : _controller != null &&
                               _controller!.value.isInitialized
-                          ? Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: AspectRatio(
-                                aspectRatio: _controller!.value.aspectRatio,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: VideoPlayer(_controller!),
-                                ),
+                          ? GestureDetector(
+                              onTap: () {
+                                if (_controller!.value.isPlaying) {
+                                  _controller!.pause();
+                                } else {
+                                  _controller!.play();
+                                }
+                                setState(() {});
+                              },
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  AspectRatio(
+                                    aspectRatio:
+                                        _controller!.value.aspectRatio,
+                                    child: VideoPlayer(_controller!),
+                                  ),
+                                  if (!_controller!.value.isPlaying)
+                                    Container(
+                                      width: 64, height: 64,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                            alpha: 0.5),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                              alpha: 0.25),
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.play_arrow_rounded,
+                                        color: Colors.white,
+                                        size: 38,
+                                      ),
+                                    ),
+                                ],
                               ),
                             )
                           : const SizedBox.shrink(),
             ),
           ),
+
+          // ── Bottom label ────────────────────────────────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Text(
-              'Showing sign for: ${widget.word}',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade700),
+            color: AppColors.ink,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.sign_language_rounded,
+                    color: AppColors.electric, size: 15),
+                const SizedBox(width: 8),
+                Text(
+                  'Sign for: ${widget.word}',
+                  style: AppFonts.plusJakarta(
+                    color: const Color(0xFF9DB0E8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.error, required this.word});
+  final String error;
+  final String word;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.error.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+            ),
+            child: const Icon(Icons.videocam_off_rounded,
+                size: 38, color: AppColors.error),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No Video Found',
+            style: AppFonts.spaceGrotesk(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Could not find a sign video for "$word".',
+            textAlign: TextAlign.center,
+            style: AppFonts.plusJakarta(
+              fontSize: 13,
+              color: const Color(0xFF9DB0E8),
+              height: 1.55,
             ),
           ),
         ],

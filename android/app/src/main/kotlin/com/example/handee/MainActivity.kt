@@ -17,7 +17,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var aslNativeEngine: AslNativeEngine
 
     companion object {
-        private const val UNITY_OBJECT = "AvatarController"
+        private const val UNITY_OBJECT = "HamadaAvatar"
         private const val UNITY_METHOD = "PlaySign"
     }
 
@@ -116,7 +116,10 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onStop() {
-        HandeeUnityUtils.pause()
+        // Keep Unity alive while the Flutter activity is still visible (e.g. keyboard).
+        if (isFinishing) {
+            HandeeUnityUtils.pause()
+        }
         super.onStop()
     }
 

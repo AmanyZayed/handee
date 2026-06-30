@@ -17,7 +17,7 @@ class UnityBridge {
   static UnityWidgetController? get controller => UnityWidgetController.instance;
 
   static Future<bool> waitUntilReady({
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     if (!isSupported) return false;
     final deadline = DateTime.now().add(timeout);
@@ -31,34 +31,49 @@ class UnityBridge {
       try {
         await _channel.invokeMethod<void>('prepareUnity');
       } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
     }
-    return UnityWidgetController.instance != null;
+    return false;
   }
 
-  /// AvatarController.PlaySign(word) with retries.
+  static Future<void> prepare() async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('prepareUnity');
+    } catch (_) {}
+  }
+
+  /// Dispatch sign playback to every known Unity avatar object.
   static Future<bool> playSign(String text) async {
     if (!isSupported) return false;
     final trimmed = text.trim().toLowerCase();
     if (trimmed.isEmpty) return false;
 
-    await waitUntilReady();
-
+    final ready = await waitUntilReady();
     final unity = UnityWidgetController.instance;
-    if (unity == null) {
+    if (!ready || unity == null) {
       debugPrint('Unity controller not ready');
       return false;
     }
 
-    await unity.playSign(trimmed);
-    for (var i = 1; i <= 8; i++) {
-      await Future<void>.delayed(Duration(milliseconds: 400 * i));
-      await unity.postMessage(
-        UnityConfig.gameObject,
-        UnityConfig.playMethod,
-        trimmed,
-      );
+    await prepare();
+
+    for (final target in UnityConfig.legacyGameObjects) {
+      await unity.postMessage(target, UnityConfig.receiveMethod, trimmed);
+      await unity.postMessage(target, UnityConfig.playTextMethod, trimmed);
+      // Some Unity builds only animate after PlayText with an empty arg.
+      await unity.postMessage(target, UnityConfig.playTextMethod, '');
     }
+
+    await unity.postMessage(
+      UnityConfig.gameObject,
+      UnityConfig.playMethod,
+      trimmed,
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await prepare();
+    await unity.postMessage(UnityConfig.gameObject, UnityConfig.playMethod, trimmed);
     return true;
   }
 

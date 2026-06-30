@@ -1,11 +1,19 @@
-/// Must match the GameObject and method on the Unity avatar script.
+/// Must match GameObject names in the Unity export (data.unity3d).
 class UnityConfig {
   UnityConfig._();
 
-  static const gameObject = 'AvatarController';
-  static const playMethod = 'PlaySign';
+  /// Root avatar object in the exported ASL scene.
+  static const gameObject = 'HamadaAvatar';
 
-  /// Legacy names still present in some Unity exports.
-  static const legacyGameObject = 'Hamada';
-  static const legacyMethod = 'ReceiveTextFromFlutter';
+  static const playMethod = 'PlaySign';
+  static const receiveMethod = 'ReceiveTextFromFlutter';
+  static const playTextMethod = 'PlayText';
+
+  /// Alternate names seen in scene / at runtime.
+  static const legacyGameObjects = [
+    'HamadaAvatar',
+    'Hamada',
+    'Avatar',
+    'ASLAnimator',
+  ];
 }

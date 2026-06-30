@@ -29,7 +29,19 @@ object HandeeUnityUtils {
 
     var pendingMessage: Triple<String, String, String>? = null
 
-    private val legacyTargets = listOf("Hamada", "Avatar")
+    private val legacyTargets = listOf(
+        "HamadaAvatar",
+        "Hamada",
+        "Avatar",
+        "ASLAnimator",
+    )
+
+    private fun dispatchSign(target: String, message: String) {
+        send(target, "ReceiveTextFromFlutter", message)
+        send(target, "PlayText", message)
+        // Some Unity builds read stored text when PlayText is called with no payload.
+        send(target, "PlayText", "")
+    }
 
     private val attachListener = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(view: View) {
@@ -44,7 +56,7 @@ object HandeeUnityUtils {
     private fun scheduleSceneReady() {
         sceneReady = false
         mainHandler.removeCallbacksAndMessages(null)
-        val delays = longArrayOf(2000, 4000, 6000, 9000)
+        val delays = longArrayOf(500, 1200, 2500, 4000, 6000, 8000)
         for (delay in delays) {
             mainHandler.postDelayed(
                 {
@@ -112,15 +124,31 @@ object HandeeUnityUtils {
 
         send(gameObject, methodName, message)
 
-        // Current export uses Hamada + ReceiveTextFromFlutter until Unity is rebuilt with AvatarController.
-        if (methodName == "PlaySign") {
-            for (target in legacyTargets) {
-                send(target, "ReceiveTextFromFlutter", message)
-                send(target, "PlayText", "")
+        when (methodName) {
+            "PlaySign" -> {
+                for (target in legacyTargets) {
+                    dispatchSign(target, message)
+                }
             }
-        } else if (methodName == "ReceiveTextFromFlutter") {
-            for (target in legacyTargets) {
-                send(target, "PlayText", "")
+            "ReceiveTextFromFlutter" -> {
+                for (target in legacyTargets) {
+                    if (target != gameObject) {
+                        dispatchSign(target, message)
+                    } else {
+                        send(target, "PlayText", message)
+                        send(target, "PlayText", "")
+                    }
+                }
+            }
+            "PlayText" -> {
+                if (message.isNotEmpty()) {
+                    for (target in legacyTargets) {
+                        if (target != gameObject) {
+                            send(target, "ReceiveTextFromFlutter", message)
+                            send(target, "PlayText", message)
+                        }
+                    }
+                }
             }
         }
     }

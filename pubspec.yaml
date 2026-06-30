@@ -26,6 +26,7 @@ dependencies:
   video_player: ^2.10.0
   speech_to_text: ^7.3.0
   flutter_tts: ^4.2.5
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:
@@ -35,7 +36,17 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Variable.ttf
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+
   assets:
+    - assets/config/
+    - assets/fonts/
     - assets/images/
     - assets/models/model.tflite
     - assets/models/sign_to_prediction_index_map.json

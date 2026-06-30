@@ -49,7 +49,7 @@ class UnityWidgetController {
     }
   }
 
-  /// Primary sign API: AvatarController.PlaySign(word).
+  /// Primary sign API on the exported avatar root object.
   Future<void> playSign(String word) {
     final trimmed = word.trim().toLowerCase();
     if (trimmed.isEmpty) return Future.value();

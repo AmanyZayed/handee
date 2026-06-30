@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'services/app_prefs.dart';
 import 'splash/splash_screen.dart';
-import 'asl_translator_page.dart';
-import 'pages/speech_to_text_page.dart';
-import 'pages/text_to_speech_page.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +11,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await AppPrefs.instance.loadLargeTextNotifier();
 
   runApp(const HandeeApp());
 }
@@ -21,13 +21,22 @@ class HandeeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const SplashScreen(),
-      routes: {
-        '/asl-translator': (context) => const AslTranslatorPage(),
-        '/speech-to-text': (context) => const SpeechToTextPage(),
-        '/text-to-speech': (context) => const TextToSpeechPage(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: AppPrefs.largeTextNotifier,
+      builder: (context, largeText, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.theme,
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(largeText ? 1.15 : 1.0),
+              ),
+              child: child!,
+            );
+          },
+          home: const SplashScreen(),
+        );
       },
     );
   }

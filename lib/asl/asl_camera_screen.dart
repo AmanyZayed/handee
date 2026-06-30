@@ -1,15 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:handee/theme/app_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'asl_ai_mode.dart';
 import 'asl_recognition_mode.dart';
 import 'asl_skeleton_overlay.dart';
 import 'native_asl_bridge.dart';
 import 'tflite_asl_service.dart';
 import 'yolo_prediction_smoother.dart';
+import '../theme/app_theme.dart';
 
 class AslCameraScreen extends StatefulWidget {
-  const AslCameraScreen({super.key});
+  const AslCameraScreen({super.key, this.isTab = false});
+
+  /// When true the back button in the overlay is hidden (used when embedded as a tab).
+  final bool isTab;
 
   @override
   State<AslCameraScreen> createState() => _AslCameraScreenState();
@@ -103,12 +110,87 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
       ValueNotifier<List<double>?>(null);
   bool _showSkeletonOverlay = false;
 
+  AslAiMode _aiMode = AslAiMode.detect;
+  String _composedText = '';
+  String? _lastAcceptedLabel;
+  final FlutterTts _tts = FlutterTts();
+
   @override
   void initState() {
     super.initState();
     _profileConfig = _profileConfigs[_predictionProfile]!;
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.45);
     _listenToNativeStream();
     _startSetup();
+  }
+
+  Future<void> _onAiModeChanged(AslAiMode mode) async {
+    if (_isRecognitionStarted) {
+      await NativeAslBridge.stopRecognition();
+    }
+    setState(() {
+      _aiMode = mode;
+      _composedText = '';
+      _lastAcceptedLabel = null;
+      _isRecognitionStarted = false;
+    });
+
+    if (mode == AslAiMode.buildSentence) {
+      await _onPipelineChanged(AslRecognitionPipeline.words);
+    } else if (mode == AslAiMode.buildWord) {
+      await _onPipelineChanged(AslRecognitionPipeline.yoloFast);
+      await _onYoloFilterChanged(AslYoloClassFilter.both);
+    } else if (mode == AslAiMode.signToSpeech) {
+      await _onPipelineChanged(AslRecognitionPipeline.words);
+    }
+  }
+
+  void _acceptSign(String rawLabel) {
+    final label = rawLabel.trim();
+    if (label.isEmpty || label == _lastAcceptedLabel) return;
+    _lastAcceptedLabel = label;
+
+    switch (_aiMode) {
+      case AslAiMode.detect:
+        return;
+      case AslAiMode.buildSentence:
+        setState(() {
+          _composedText =
+              _composedText.isEmpty ? label : '$_composedText $label';
+        });
+      case AslAiMode.buildWord:
+        setState(() {
+          _composedText = '$_composedText$label';
+        });
+      case AslAiMode.signToSpeech:
+        setState(() => _composedText = label);
+        _tts.speak(label);
+    }
+  }
+
+  void _clearComposed() {
+    setState(() {
+      _composedText = '';
+      _lastAcceptedLabel = null;
+    });
+  }
+
+  Future<void> _speakComposed() async {
+    if (_composedText.trim().isEmpty) return;
+    await _tts.speak(_composedText.trim());
+  }
+
+  void _maybeAcceptFromWords() {
+    if (_aiMode == AslAiMode.detect || _stableLabel == null) return;
+    _acceptSign(_stableLabel!);
+  }
+
+  void _maybeAcceptFromYolo() {
+    if (_aiMode != AslAiMode.buildWord) return;
+    final label = _yoloStableLabel ?? _yoloRawLabel;
+    if (label == null || label.isEmpty) return;
+    _acceptSign(label);
   }
 
   void _listenToNativeStream() {
@@ -188,6 +270,20 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
     setState(() {
       _isSettingUp = false;
     });
+  }
+
+  Future<void> _retrySetup() async {
+    setState(() {
+      _errorMessage = null;
+      _isSettingUp = true;
+      _isModelLoaded = false;
+      _cameraPermissionGranted = false;
+    });
+    await _startSetup();
+  }
+
+  Future<void> _openCameraSettings() async {
+    await openAppSettings();
   }
 
   Future<void> _requestCameraPermission() async {
@@ -306,6 +402,7 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
     if (!mounted) return;
     setState(() {
       _updateYoloDisplayText(topLabel: topLabel);
+      _maybeAcceptFromYolo();
     });
   }
 
@@ -402,9 +499,13 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
       final canStableAccept =
           _candidateRepeatCount >= _profileConfig.requiredStableRepeats;
       if (canFastAccept || canStableAccept) {
+        final prev = _stableLabel;
         _stableLabel = prediction.label;
         _stableConfidence = prediction.confidence;
         _stableUpdatedAt = DateTime.now();
+        if (prev != prediction.label) {
+          _maybeAcceptFromWords();
+        }
       }
     } else {
       _candidateLabel = null;
@@ -528,6 +629,7 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
           _yoloSmoother.reset();
           _yoloRawLabel = null;
           _yoloStableLabel = null;
+          _lastAcceptedLabel = null;
         });
       } else {
         debugPrint('START button pressed');
@@ -581,50 +683,40 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
     NativeAslBridge.stopRecognition();
     _skeletonLandmarks.dispose();
     _tfliteService.dispose();
+    _tts.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed:
-            _isModelLoaded && _cameraPermissionGranted && !_isSettingUp
-            ? _toggleRecognition
-            : null,
-        label: Text(_isRecognitionStarted ? 'Stop' : 'Start'),
-        icon: Icon(_isRecognitionStarted ? Icons.stop : Icons.play_arrow),
-      ),
     );
   }
 
   Widget _buildBody() {
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            _errorMessage!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
-          ),
-        ),
+      return _CameraError(
+        message: _errorMessage!,
+        onRetry: _retrySetup,
+        onOpenSettings: _errorMessage!.toLowerCase().contains('permission')
+            ? _openCameraSettings
+            : null,
       );
     }
 
     if (_isSettingUp || !_isModelLoaded) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const _CameraLoading();
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        const AndroidView(
-          viewType: 'handee/native_camera_preview',
-        ),
+        // Native camera view
+        const AndroidView(viewType: 'handee/native_camera_preview'),
+
+        // Skeleton overlay
         Positioned.fill(
           child: IgnorePointer(
             child: ValueListenableBuilder<List<double>?>(
@@ -643,61 +735,141 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
             ),
           ),
         ),
+
+        // Top bar: back + skeleton toggle
         Positioned(
-          top: 8,
-          right: 8,
+          top: 0,
+          left: 0,
+          right: 0,
           child: SafeArea(
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.45),
-              shape: const CircleBorder(),
-              child: IconButton(
-                tooltip: _showSkeletonOverlay
-                    ? 'Hide skeleton overlay'
-                    : 'Show skeleton overlay (testing)',
-                onPressed: () {
-                  setState(() {
-                    _showSkeletonOverlay = !_showSkeletonOverlay;
-                    if (!_showSkeletonOverlay) {
-                      _skeletonLandmarks.value = null;
-                    }
-                  });
-                },
-                icon: Icon(
-                  _showSkeletonOverlay
-                      ? Icons.visibility
-                      : Icons.visibility_off_outlined,
-                  color: Colors.white,
-                ),
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  if (!widget.isTab)
+                    _GlassIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                  const SizedBox(width: 8),
+                  // Mode label pill
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.sign_language_rounded,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _pipeline.displayName,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  _GlassIconButton(
+                    icon: _showSkeletonOverlay
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_outlined,
+                    active: _showSkeletonOverlay,
+                    onTap: () {
+                      setState(() {
+                        _showSkeletonOverlay = !_showSkeletonOverlay;
+                        if (!_showSkeletonOverlay) {
+                          _skeletonLandmarks.value = null;
+                        }
+                      });
+                    },
+                    tooltip: _showSkeletonOverlay
+                        ? 'Hide skeleton'
+                        : 'Show skeleton',
+                  ),
+                ],
               ),
             ),
           ),
         ),
+
+        // Live prediction — anchored just below the top bar
         Positioned(
-          top: 24,
-          left: 24,
-          right: 72,
+          top: 80,
+          left: 16,
+          right: 16,
           child: SafeArea(
             bottom: false,
             child: _StatusPill(
               text: _predictionDisplayText,
-              fontSize: _pipeline == AslRecognitionPipeline.yoloApp ? 16 : 20,
-              horizontalPadding: 18,
-              verticalPadding: 12,
+              fontSize:
+                  _pipeline == AslRecognitionPipeline.yoloApp ? 15 : 20,
             ),
           ),
         ),
+
+        // Bottom controls — compose panel, mode bar, mode selector, FAB
+        // All in one fluid column so heights are never hard-coded.
         Positioned(
           left: 16,
           right: 16,
-          bottom: 88,
+          bottom: 0,
           child: SafeArea(
             top: false,
-            child: _ModeSelector(
-              pipeline: _pipeline,
-              yoloFilter: _yoloFilter,
-              enabled: !_isRecognitionStarted,
-              onPipelineChanged: _onPipelineChanged,
-              onYoloFilterChanged: _onYoloFilterChanged,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_aiMode != AslAiMode.detect)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _AiComposePanel(
+                        mode: _aiMode,
+                        text: _composedText,
+                        onClear: _clearComposed,
+                        onSpeak: _speakComposed,
+                      ),
+                    ),
+                  _AiModeBar(
+                    selected: _aiMode,
+                    enabled: !_isRecognitionStarted,
+                    onChanged: _onAiModeChanged,
+                  ),
+                  const SizedBox(height: 10),
+                  _ModeSelector(
+                    pipeline: _pipeline,
+                    yoloFilter: _yoloFilter,
+                    enabled: !_isRecognitionStarted,
+                    onPipelineChanged: _onPipelineChanged,
+                    onYoloFilterChanged: _onYoloFilterChanged,
+                  ),
+                  if (_isModelLoaded && _cameraPermissionGranted && !_isSettingUp) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: _CameraFab(
+                        isRunning: _isRecognitionStarted,
+                        onTap: _toggleRecognition,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -706,6 +878,242 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Camera FAB – gradient circle, stop=red / start=electric blue
+// ─────────────────────────────────────────────────────────────────────────────
+class _CameraFab extends StatelessWidget {
+  const _CameraFab({required this.isRunning, required this.onTap});
+  final bool isRunning;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: isRunning
+                ? [const Color(0xFFE53935), const Color(0xFFEF5350)]
+                : [AppColors.primary, AppColors.electric],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isRunning ? const Color(0xFFE53935) : AppColors.primary)
+                  .withValues(alpha: 0.55),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Icon(
+          isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+          color: Colors.white,
+          size: 38,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Glass icon button
+// ─────────────────────────────────────────────────────────────────────────────
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.active = false,
+  });
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.electric.withValues(alpha: 0.28)
+                : Colors.black.withValues(alpha: 0.48),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: active
+                  ? AppColors.cyan.withValues(alpha: 0.6)
+                  : Colors.white.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: active ? AppColors.cyan : Colors.white,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loading screen
+// ─────────────────────────────────────────────────────────────────────────────
+class _CameraLoading extends StatelessWidget {
+  const _CameraLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.ink,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.electric],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: AppShadow.button,
+              ),
+              child: const Icon(Icons.sign_language_rounded,
+                  color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'Initializing camera…',
+              style: AppFonts.plusJakarta(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: 36, height: 36,
+              child: CircularProgressIndicator(
+                color: AppColors.electric,
+                strokeWidth: 2.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Error screen
+// ─────────────────────────────────────────────────────────────────────────────
+class _CameraError extends StatelessWidget {
+  const _CameraError({
+    required this.message,
+    required this.onRetry,
+    this.onOpenSettings,
+  });
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback? onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.ink,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.35),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Icon(Icons.videocam_off_rounded,
+                    size: 38, color: AppColors.error),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                'Camera Error',
+                style: AppFonts.spaceGrotesk(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: AppFonts.plusJakarta(
+                  fontSize: 14,
+                  color: const Color(0xFF9DB0E8),
+                  height: 1.55,
+                ),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Try again'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              if (onOpenSettings != null) ...[
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: onOpenSettings,
+                  child: Text(
+                    'Open settings',
+                    style: AppFonts.plusJakarta(
+                      color: AppColors.cyan,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mode selector panel (glass card above FAB)
+// ─────────────────────────────────────────────────────────────────────────────
 class _ModeSelector extends StatelessWidget {
   const _ModeSelector({
     required this.pipeline,
@@ -723,105 +1131,286 @@ class _ModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Recognition mode',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xCC0B1030),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'RECOGNITION MODE',
+            style: AppFonts.plusJakarta(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF7C8AC0),
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: AslRecognitionPipeline.values.map((mode) {
+              final selected = pipeline == mode;
+              return GestureDetector(
+                onTap: enabled ? () => onPipelineChanged(mode) : null,
+                child: AnimatedOpacity(
+                  opacity: enabled ? 1.0 : 0.4,
+                  duration: const Duration(milliseconds: 150),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: selected
+                          ? const LinearGradient(
+                              colors: [AppColors.primary, AppColors.electric],
+                            )
+                          : null,
+                      color: selected ? null : Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                        color: selected
+                            ? Colors.transparent
+                            : Colors.white.withValues(alpha: 0.15),
+                      ),
+                    ),
+                    child: Text(
+                      mode.displayName,
+                      style: AppFonts.plusJakarta(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (pipeline != AslRecognitionPipeline.words) ...[
+            const SizedBox(height: 10),
+            Text(
+              'YOLO CLASSES',
+              style: AppFonts.plusJakarta(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF7C8AC0),
+                letterSpacing: 0.8,
+              ),
             ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: AslRecognitionPipeline.values.map((mode) {
-                final selected = pipeline == mode;
-                return ChoiceChip(
-                  label: Text(
-                    mode.displayName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: selected ? Colors.white : Colors.white70,
+              children: AslYoloClassFilter.values.map((filter) {
+                final selected = yoloFilter == filter;
+                return GestureDetector(
+                  onTap: enabled ? () => onYoloFilterChanged(filter) : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppColors.cyan.withValues(alpha: 0.22)
+                          : Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                        color: selected
+                            ? AppColors.cyan.withValues(alpha: 0.6)
+                            : Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: Text(
+                      filter.name,
+                      style: AppFonts.plusJakarta(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? AppColors.cyan : Colors.white70,
+                      ),
                     ),
                   ),
-                  selected: selected,
-                  onSelected: enabled
-                      ? (_) => onPipelineChanged(mode)
-                      : null,
                 );
               }).toList(),
             ),
-            if (pipeline != AslRecognitionPipeline.words) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'YOLO classes',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                children: AslYoloClassFilter.values.map((filter) {
-                  final selected = yoloFilter == filter;
-                  return ChoiceChip(
-                    label: Text(
-                      filter.name,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: selected ? Colors.white : Colors.white70,
-                      ),
-                    ),
-                    selected: selected,
-                    onSelected: enabled
-                        ? (_) => onYoloFilterChanged(filter)
-                        : null,
-                  );
-                }).toList(),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({
-    required this.text,
-    this.fontSize = 14,
-    this.horizontalPadding = 14,
-    this.verticalPadding = 8,
+// ─────────────────────────────────────────────────────────────────────────────
+// AI mode bar + compose panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AiModeBar extends StatelessWidget {
+  const _AiModeBar({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
   });
+
+  final AslAiMode selected;
+  final bool enabled;
+  final ValueChanged<AslAiMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: AslAiMode.values.map((mode) {
+          final active = mode == selected;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: enabled ? () => onChanged(mode) : null,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppColors.primary
+                      : Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: active
+                        ? AppColors.electric
+                        : Colors.white.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Text(
+                  mode.label,
+                  style: AppFonts.plusJakarta(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _AiComposePanel extends StatelessWidget {
+  const _AiComposePanel({
+    required this.mode,
+    required this.text,
+    required this.onClear,
+    required this.onSpeak,
+  });
+
+  final AslAiMode mode;
+  final String text;
+  final VoidCallback onClear;
+  final VoidCallback onSpeak;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xE60B1030),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.electric.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            mode.hint.toUpperCase(),
+            style: AppFonts.plusJakarta(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.cyan,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text.isEmpty ? '…' : text,
+            style: AppFonts.spaceGrotesk(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton(
+                onPressed: onClear,
+                child: Text(
+                  'Clear',
+                  style: AppFonts.plusJakarta(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              FilledButton.icon(
+                onPressed: text.trim().isEmpty ? null : onSpeak,
+                icon: const Icon(Icons.volume_up_rounded, size: 16),
+                label: const Text('Speak'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prediction status pill
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.text, this.fontSize = 20});
 
   final String text;
   final double fontSize;
-  final double horizontalPadding;
-  final double verticalPadding;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: horizontalPadding,
-          vertical: verticalPadding,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(14),
+          color: const Color(0xBF0B1030),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          border: Border.all(
+            color: AppColors.electric.withValues(alpha: 0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.25),
+              blurRadius: 18,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Text(
           text,
-          style: TextStyle(
+          textAlign: TextAlign.center,
+          style: AppFonts.spaceGrotesk(
             fontSize: fontSize,
             color: Colors.white,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
           ),
         ),
       ),

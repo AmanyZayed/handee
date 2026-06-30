@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:handee/theme/app_fonts.dart';
 
+import '../services/unity_bridge.dart';
+import '../theme/app_theme.dart';
 import '../unity/handee_unity_registrar.dart';
 import '../unity/unity_widget_controller.dart';
 
@@ -18,28 +22,31 @@ class UnityAvatarPanel extends StatefulWidget {
 class UnityAvatarPanelState extends State<UnityAvatarPanel> {
   static const _unityChannel = MethodChannel('handee_unity');
 
-  bool _sceneVisible = false;
+  bool _warmingUp = true;
 
   bool get isSupported => !kIsWeb && Platform.isAndroid;
 
-  Future<void> _waitForUnityReady() async {
-    for (var i = 0; i < 50; i++) {
+  Future<void> _warmUpUnity() async {
+    for (var i = 0; i < 12; i++) {
       try {
+        await _unityChannel.invokeMethod<void>('prepareUnity');
         final ready = await _unityChannel.invokeMethod<bool>('isReady');
         if (ready == true) {
-          UnityWidgetController.register();
-          if (mounted) setState(() => _sceneVisible = true);
+          if (mounted) setState(() => _warmingUp = false);
           return;
         }
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      } catch (e) {
+        if (kDebugMode) debugPrint('Unity warm-up: $e');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    UnityWidgetController.register();
-    if (mounted) setState(() => _sceneVisible = true);
+    if (mounted) setState(() => _warmingUp = false);
+    await UnityBridge.prepare();
   }
 
   void _onPlatformViewCreated(int id) {
-    _waitForUnityReady();
+    UnityWidgetController.register();
+    unawaited(_warmUpUnity());
   }
 
   @override
@@ -51,7 +58,16 @@ class UnityAvatarPanelState extends State<UnityAvatarPanel> {
   @override
   Widget build(BuildContext context) {
     if (!isSupported) {
-      return const SizedBox.shrink();
+      return Center(
+        child: Text(
+          'Avatar is available on Android only.',
+          style: AppFonts.plusJakarta(
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
     }
 
     return Stack(
@@ -63,33 +79,43 @@ class UnityAvatarPanelState extends State<UnityAvatarPanel> {
           creationParamsCodec: const StandardMessageCodec(),
           onPlatformViewCreated: _onPlatformViewCreated,
         ),
-        AnimatedOpacity(
-          opacity: _sceneVisible ? 0 : 1,
-          duration: const Duration(milliseconds: 400),
-          child: Container(
-            color: const Color.fromARGB(255, 238, 234, 239),
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/images/logo.png',
-                  width: 100,
-                  height: 100,
+        if (_warmingUp)
+          IgnorePointer(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                margin: const EdgeInsets.only(top: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading avatar…',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.deepPurple.shade700,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.electric,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Loading avatar…',
+                      style: AppFonts.plusJakarta(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

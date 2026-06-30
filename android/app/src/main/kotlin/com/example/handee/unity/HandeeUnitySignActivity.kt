@@ -15,9 +15,14 @@ class HandeeUnitySignActivity : UnityPlayerActivity() {
     companion object {
         private const val TAG = "HandeeUnitySign"
         const val EXTRA_WORD = "word"
-        private const val PRIMARY_OBJECT = "AvatarController"
+        private const val PRIMARY_OBJECT = "HamadaAvatar"
         private const val PRIMARY_METHOD = "PlaySign"
-        private val LEGACY_TARGETS = listOf("Hamada", "Avatar")
+        private val LEGACY_TARGETS = listOf(
+            "HamadaAvatar",
+            "Hamada",
+            "Avatar",
+            "ASLAnimator",
+        )
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -50,6 +55,7 @@ class HandeeUnitySignActivity : UnityPlayerActivity() {
         for (target in LEGACY_TARGETS) {
             try {
                 UnityPlayer.UnitySendMessage(target, "ReceiveTextFromFlutter", word)
+                UnityPlayer.UnitySendMessage(target, "PlayText", word)
                 UnityPlayer.UnitySendMessage(target, "PlayText", "")
                 Log.i(TAG, "Legacy sent to $target: $word")
             } catch (e: Exception) {
