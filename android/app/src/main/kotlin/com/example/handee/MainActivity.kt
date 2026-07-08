@@ -17,8 +17,8 @@ class MainActivity : FlutterActivity() {
     private lateinit var aslNativeEngine: AslNativeEngine
 
     companion object {
-        private const val UNITY_OBJECT = "HamadaAvatar"
-        private const val UNITY_METHOD = "PlaySign"
+        private const val UNITY_OBJECT = "Hamada"
+        private const val UNITY_METHOD = "ReceiveTextFromFlutter"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -79,13 +79,23 @@ class MainActivity : FlutterActivity() {
                         HandeeUnityUtils.postMessage(gameObject, methodName, message)
                         result.success(true)
                     }
+                    "playSign" -> {
+                        val word = call.argument<String>("word")?.trim().orEmpty()
+                        if (word.isEmpty() || !HandeeUnityUtils.isNativeRuntimeSupported()) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        HandeeUnityUtils.prepareForMessage()
+                        HandeeUnityUtils.playSignWord(word)
+                        result.success(true)
+                    }
                     "prepareUnity" -> {
                         HandeeUnityUtils.prepareForMessage()
                         result.success(true)
                     }
                     "openSign" -> {
                         val word = call.argument<String>("word")?.trim().orEmpty()
-                        if (word.isEmpty()) {
+                        if (word.isEmpty() || !HandeeUnityUtils.isNativeRuntimeSupported()) {
                             result.success(false)
                             return@setMethodCallHandler
                         }
@@ -100,8 +110,13 @@ class MainActivity : FlutterActivity() {
                     }
                     "isReady" -> {
                         result.success(
-                            HandeeUnityUtils.unityLoaded && HandeeUnityUtils.sceneReady,
+                            HandeeUnityUtils.isNativeRuntimeSupported() &&
+                                HandeeUnityUtils.unityLoaded &&
+                                HandeeUnityUtils.sceneReady,
                         )
+                    }
+                    "isNativeSupported" -> {
+                        result.success(HandeeUnityUtils.isNativeRuntimeSupported())
                     }
                     else -> result.notImplemented()
                 }
@@ -111,8 +126,10 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         HandeeUnityUtils.activity = this
-        HandeeUnityUtils.resume()
-        HandeeUnityUtils.focus()
+        if (HandeeUnityUtils.isNativeRuntimeSupported()) {
+            HandeeUnityUtils.resume()
+            HandeeUnityUtils.focus()
+        }
     }
 
     override fun onStop() {

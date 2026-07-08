@@ -1,31 +1,39 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:handee/theme/app_fonts.dart';
 
-import '../home/home_screen.dart';
+import '../services/auth_session.dart';
 import '../theme/app_theme.dart';
 import 'login_widget.dart';
 import 'sign_up_widget.dart';
 
-/// Login shown after splash + onboarding. Never auto-skips to home.
-class LoginScreen extends StatelessWidget {
+/// Full-screen sign-in shown after splash + onboarding.
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _redirectIfAlreadySignedIn();
+  }
+
+  Future<void> _redirectIfAlreadySignedIn() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await AuthSession.persistUser(user);
+    if (!mounted) return;
+    await AuthSession.goHome(context);
+  }
+
   Future<void> _goHome(BuildContext context, User user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isLoggedIn', true);
-    if (user.email != null && user.email!.isNotEmpty) {
-      await prefs.setString('registeredEmail', user.email!);
-    }
-    final name = user.displayName?.trim();
-    if (name != null && name.isNotEmpty) {
-      await prefs.setString('username', name);
-    }
+    await AuthSession.persistUser(user);
     if (!context.mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+    await AuthSession.goHome(context);
   }
 
   @override
@@ -53,20 +61,25 @@ class LoginScreen extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.person_outline_rounded,
-                              color: AppColors.primary),
+                          const Icon(
+                            Icons.person_outline_rounded,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Continue as ${user.email ?? user.displayName ?? 'you'}',
-                              style: const TextStyle(
+                              style: AppFonts.plusJakarta(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_rounded,
-                              color: AppColors.primary, size: 20),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
                         ],
                       ),
                     ),
@@ -76,7 +89,9 @@ class LoginScreen extends StatelessWidget {
             ],
             Expanded(
               child: LoginWidget(
+                embedded: true,
                 onLogin: (u) => _goHome(context, u),
+                onContinueAsGuest: () => AuthSession.continueAsGuest(context),
                 onCreateAccount: () {
                   Navigator.push(
                     context,

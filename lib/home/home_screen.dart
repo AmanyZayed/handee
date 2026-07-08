@@ -4,7 +4,6 @@ import 'package:handee/theme/app_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../asl/asl_camera_screen.dart';
-import '../pages/learn_tab.dart';
 import '../profile/profile_screen.dart';
 import '../pages/history_page.dart';
 import '../pages/fingerspell_page.dart';
@@ -29,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   void _onTabTap(int index) {
-    setState(() => _currentIndex = index);
+    setState(() => _currentIndex = index.clamp(0, 2));
     if (index == 0) {
       UnityBridge.prepare();
     }
@@ -37,20 +36,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tabIndex = _currentIndex.clamp(0, 2);
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
       body: IndexedStack(
-        index: _currentIndex,
+        index: tabIndex,
         children: const [
           _TranslateTab(),
           AslCameraScreen(isTab: true),
-          LearnTab(),
           ProfileScreen(),
         ],
       ),
       bottomNavigationBar: _HdBottomNav(
-        currentIndex: _currentIndex,
+        currentIndex: tabIndex,
         onTap: _onTabTap,
       ),
     );
@@ -70,7 +70,6 @@ class _HdBottomNav extends StatelessWidget {
   static const _items = [
     _NavItem(Icons.compare_arrows_rounded, 'Translate'),
     _NavItem(Icons.camera_alt_outlined, 'Recognize'),
-    _NavItem(Icons.school_outlined, 'Learn'),
     _NavItem(Icons.person_outline_rounded, 'Profile'),
   ];
 
@@ -180,11 +179,40 @@ class _TranslateTabState extends State<_TranslateTab>
     _tts.setStartHandler(() => setState(() => _isSpeaking = true));
     _tts.setCompletionHandler(() => setState(() => _isSpeaking = false));
     _tts.setCancelHandler(() => setState(() => _isSpeaking = false));
+    _tts.setLanguage('en-US');
     _textCtrl.addListener(() => setState(() {}));
+    AppPrefs.historyRevision.addListener(_onHistoryChanged);
+    _loadRecent();
+    UnityBridge.prepare();
+  }
+
+  void _onHistoryChanged() => _loadRecent();
+
+  Future<void> _loadRecent() async {
+    final words = await AppPrefs.instance.recentWords();
+    if (!mounted) return;
+    setState(() {
+      _recent
+        ..clear()
+        ..addAll(words);
+    });
+  }
+
+  Future<void> _openHistory() async {
+    final selected = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const HistoryPage()),
+    );
+    if (!mounted) return;
+    await _loadRecent();
+    if (selected != null && selected.isNotEmpty) {
+      setState(() => _textCtrl.text = selected);
+    }
   }
 
   @override
   void dispose() {
+    AppPrefs.historyRevision.removeListener(_onHistoryChanged);
     _textCtrl.dispose();
     _pulseCtrl.dispose();
     _tts.stop();
@@ -252,8 +280,6 @@ class _TranslateTabState extends State<_TranslateTab>
       );
       return;
     }
-    _addToRecent(word);
-    AppPrefs.instance.recordTranslation(word);
     _runBusy(() => SignPlayer.play(context, word));
   }
 
@@ -274,16 +300,7 @@ class _TranslateTabState extends State<_TranslateTab>
       );
       return;
     }
-    _addToRecent(text.toLowerCase());
     _runBusy(() => SignPlayer.playVideo(context, text));
-  }
-
-  void _addToRecent(String word) {
-    setState(() {
-      _recent.remove(word);
-      _recent.insert(0, word);
-      if (_recent.length > 8) _recent.removeLast();
-    });
   }
 
   String get _greeting {
@@ -299,6 +316,7 @@ class _TranslateTabState extends State<_TranslateTab>
   Widget build(BuildContext context) {
     super.build(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final keyboardOpen = keyboardInset > 0;
 
     return Column(
       children: [
@@ -308,19 +326,23 @@ class _TranslateTabState extends State<_TranslateTab>
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(0, 14, 0, 10),
-              child: _HomeTopBar(greeting: _greeting),
+              child: _HomeTopBar(
+                greeting: _greeting,
+                onHistoryTap: _openHistory,
+              ),
             ),
           ),
         ),
         Expanded(
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              // Avatar — always fills the full available height, never shrinks
+              // Avatar — sits above the floating input card so hands stay visible.
               Positioned(
                 top: 0,
                 left: 18,
                 right: 18,
-                bottom: 8,
+                bottom: 28,
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
@@ -341,7 +363,10 @@ class _TranslateTabState extends State<_TranslateTab>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      const HomeAvatarPanel(),
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 96),
+                        child: HomeAvatarPanel(),
+                      ),
                       ListenableBuilder(
                         listenable: _textCtrl,
                         builder: (_, __) {
@@ -365,56 +390,65 @@ class _TranslateTabState extends State<_TranslateTab>
                   ),
                 ),
               ),
-
-              // Input area — slides up above the keyboard, overlays avatar bottom
-              Positioned(
+              // Input — slides up above the keyboard only
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
                 left: 0,
                 right: 0,
                 bottom: keyboardInset,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_recent.isNotEmpty) ...[
-                      SizedBox(
-                        height: 32,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          itemCount: _recent.length,
-                          itemBuilder: (_, i) => _RecentChip(
-                            label: _recent[i],
-                            onTap: () =>
-                                setState(() => _textCtrl.text = _recent[i]),
+                child: SingleChildScrollView(
+                  physics: keyboardOpen
+                      ? const ClampingScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_recent.isNotEmpty) ...[
+                        SizedBox(
+                          height: 32,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 18),
+                            itemCount: _recent.length,
+                            itemBuilder: (_, i) => _RecentChip(
+                              label: _recent[i],
+                              onTap: () =>
+                                  setState(() => _textCtrl.text = _recent[i]),
+                            ),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                      ],
+                      _InputCard(
+                        controller: _textCtrl,
+                        inputMode: _inputMode,
+                        isListening: _isListening,
+                        isSpeaking: _isSpeaking,
+                        busy: _busy,
+                        pulseAnim: _pulseAnim,
+                        onModeChanged: (m) {
+                          if (_isListening) {
+                            _speech.stop();
+                            _pulseCtrl
+                              ..stop()
+                              ..reset();
+                          }
+                          setState(() {
+                            _inputMode = m;
+                            _isListening = false;
+                          });
+                        },
+                        onToggleListen: _toggleListen,
+                        onPlayAvatar: _onPlayAvatar,
+                        onPlayVideo: _onPlayVideo,
+                        onSpeak: _speak,
+                        onFingerspell: _openFingerspell,
                       ),
                       const SizedBox(height: 8),
                     ],
-                    _InputCard(
-                      controller: _textCtrl,
-                      inputMode: _inputMode,
-                      isListening: _isListening,
-                      isSpeaking: _isSpeaking,
-                      busy: _busy,
-                      pulseAnim: _pulseAnim,
-                      onModeChanged: (m) {
-                        if (_isListening) {
-                          _speech.stop();
-                          _pulseCtrl..stop()..reset();
-                        }
-                        setState(() {
-                          _inputMode = m;
-                          _isListening = false;
-                        });
-                      },
-                      onToggleListen: _toggleListen,
-                      onPlayAvatar: _onPlayAvatar,
-                      onPlayVideo: _onPlayVideo,
-                      onSpeak: _speak,
-                      onFingerspell: _openFingerspell,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -430,8 +464,13 @@ class _TranslateTabState extends State<_TranslateTab>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HomeTopBar extends StatelessWidget {
-  const _HomeTopBar({required this.greeting});
+  const _HomeTopBar({
+    required this.greeting,
+    required this.onHistoryTap,
+  });
+
   final String greeting;
+  final VoidCallback onHistoryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -444,18 +483,14 @@ class _HomeTopBar extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.primary, AppColors.electric],
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.md),
               boxShadow: AppShadow.button,
             ),
-            child: const Icon(
-              Icons.sign_language_rounded,
-              color: Colors.white,
-              size: 22,
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(
+              'assets/images/logo_mark.png',
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 12),
@@ -505,12 +540,7 @@ class _HomeTopBar extends StatelessWidget {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const HistoryPage()),
-                );
-              },
+              onTap: onHistoryTap,
               borderRadius: BorderRadius.circular(AppRadius.md),
               child: Container(
                 width: 40,
@@ -664,42 +694,40 @@ class _InputCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
             child: Row(
               children: [
-                _ModeChip(
-                  label: 'Type',
-                  icon: Icons.keyboard_rounded,
-                  selected: inputMode == 0,
-                  onTap: () => onModeChanged(0),
-                ),
-                const SizedBox(width: 8),
-                _ModeChip(
-                  label: 'Speak',
-                  icon: isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                  selected: inputMode == 1,
-                  activeColor:
-                      isListening ? AppColors.error : AppColors.primary,
-                  onTap: () => onModeChanged(1),
-                ),
-                const SizedBox(width: 8),
-                _ModeChip(
-                  label: 'Fingerspell',
-                  icon: Icons.back_hand_outlined,
-                  selected: false,
-                  onTap: onFingerspell,
-                ),
-                const Spacer(),
-                if (_hasText)
-                  GestureDetector(
-                    onTap: controller.clear,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface2,
-                        borderRadius: BorderRadius.circular(AppRadius.xs),
-                      ),
-                      child: const Icon(Icons.close_rounded,
-                          size: 14, color: AppColors.textSecondary),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _ModeChip(
+                          label: 'Type',
+                          icon: Icons.keyboard_rounded,
+                          selected: inputMode == 0,
+                          onTap: () => onModeChanged(0),
+                        ),
+                        const SizedBox(width: 8),
+                        _ModeChip(
+                          label: 'Speak',
+                          icon: isListening
+                              ? Icons.stop_rounded
+                              : Icons.mic_rounded,
+                          selected: inputMode == 1,
+                          activeColor: isListening
+                              ? AppColors.error
+                              : AppColors.primary,
+                          onTap: () => onModeChanged(1),
+                        ),
+                        const SizedBox(width: 8),
+                        _ModeChip(
+                          label: 'Fingerspell',
+                          icon: Icons.back_hand_outlined,
+                          selected: false,
+                          onTap: onFingerspell,
+                        ),
+                      ],
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -764,17 +792,20 @@ class _InputCard extends StatelessWidget {
 
   Widget _typeField() {
     return Container(
-      height: 50,
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
         color: AppColors.surface2,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.border),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 15),
       child: TextField(
         controller: controller,
+        textAlign: TextAlign.start,
+        textAlignVertical: TextAlignVertical.center,
         textInputAction: TextInputAction.done,
-        enabled: !busy,
+        keyboardType: TextInputType.text,
+        maxLines: 3,
+        minLines: 1,
         style: AppFonts.plusJakarta(
           fontSize: 15,
           color: AppColors.textPrimary,
@@ -783,7 +814,8 @@ class _InputCard extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Type a word or phrase…',
           hintStyle: AppFonts.plusJakarta(
-            color: AppColors.textHint, fontSize: 15,
+            color: AppColors.textHint,
+            fontSize: 15,
           ),
           filled: true,
           fillColor: AppColors.surface2,
@@ -791,7 +823,22 @@ class _InputCard extends StatelessWidget {
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
           isDense: true,
-          contentPadding: EdgeInsets.zero,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          suffixIcon: _hasText
+              ? IconButton(
+                  onPressed: controller.clear,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                )
+              : null,
         ),
       ),
     );

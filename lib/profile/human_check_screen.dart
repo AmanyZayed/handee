@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:handee/theme/app_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/auth_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hd_button.dart';
 import 'login_screen.dart';
@@ -54,6 +56,9 @@ class _HumanCheckScreenState extends State<HumanCheckScreen> {
       });
 
       await FirebaseAuth.instance.signOut();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(AuthSession.pendingLoginEmailKey, widget.draft.email);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

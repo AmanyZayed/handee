@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 // Active tab: pill highlight rgba(44,102,194,.28) + white text.
 // Inactive: muted icon #7C8AC0.
 
-enum HdNavTab { translate, recognize, learn, profile }
+enum HdNavTab { translate, recognize, profile }
 
 class HdBottomNav extends StatelessWidget {
   const HdBottomNav({
@@ -22,7 +22,6 @@ class HdBottomNav extends StatelessWidget {
   static const _tabs = [
     _TabDef(HdNavTab.translate, 'Translate', Icons.compare_arrows_rounded),
     _TabDef(HdNavTab.recognize, 'Recognize', Icons.camera_alt_outlined),
-    _TabDef(HdNavTab.learn, 'Learn', Icons.school_outlined),
     _TabDef(HdNavTab.profile, 'Profile', Icons.person_outline_rounded),
   ];
 

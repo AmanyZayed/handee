@@ -7,21 +7,14 @@ import android.util.Log
 import com.unity3d.player.UnityPlayer
 import com.unity3d.player.UnityPlayerActivity
 
-/**
- * Full-screen Unity signer — AvatarController.PlaySign + legacy fallbacks.
- */
+/** Full-screen Unity signer fallback. */
 class HandeeUnitySignActivity : UnityPlayerActivity() {
 
     companion object {
         private const val TAG = "HandeeUnitySign"
         const val EXTRA_WORD = "word"
-        private const val PRIMARY_OBJECT = "HamadaAvatar"
-        private const val PRIMARY_METHOD = "PlaySign"
-        private val LEGACY_TARGETS = listOf(
-            "HamadaAvatar",
+        private val SIGN_TARGETS = listOf(
             "Hamada",
-            "Avatar",
-            "ASLAnimator",
         )
     }
 
@@ -36,7 +29,7 @@ class HandeeUnitySignActivity : UnityPlayerActivity() {
             return
         }
 
-        val delays = longArrayOf(800, 1500, 2500, 3500, 5000, 7000, 9000)
+        val delays = longArrayOf(800, 1500, 2500, 3500, 5000, 7000)
         for (delay in delays) {
             handler.postDelayed({ sendSign(word) }, delay)
         }
@@ -45,21 +38,12 @@ class HandeeUnitySignActivity : UnityPlayerActivity() {
     }
 
     private fun sendSign(word: String) {
-        try {
-            UnityPlayer.UnitySendMessage(PRIMARY_OBJECT, PRIMARY_METHOD, word)
-            Log.i(TAG, "Sent $PRIMARY_OBJECT.$PRIMARY_METHOD: $word")
-        } catch (e: Exception) {
-            Log.e(TAG, "Primary send failed", e)
-        }
-
-        for (target in LEGACY_TARGETS) {
+        for (target in SIGN_TARGETS) {
             try {
                 UnityPlayer.UnitySendMessage(target, "ReceiveTextFromFlutter", word)
-                UnityPlayer.UnitySendMessage(target, "PlayText", word)
-                UnityPlayer.UnitySendMessage(target, "PlayText", "")
-                Log.i(TAG, "Legacy sent to $target: $word")
+                Log.i(TAG, "Sent $target ReceiveTextFromFlutter: $word")
             } catch (e: Exception) {
-                Log.e(TAG, "Legacy send failed for $target", e)
+                Log.e(TAG, "Send failed for $target", e)
             }
         }
     }

@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:handee/theme/app_fonts.dart';
 import '../config/app_config.dart';
-import '../home/home_screen.dart';
-import '../onboarding/onboarding_screen.dart';
-import '../profile/login_screen.dart';
 import '../services/app_prefs.dart';
+import '../services/auth_session.dart';
 import '../services/guest_session.dart';
 import '../theme/app_theme.dart';
 
@@ -77,19 +75,21 @@ class _SplashScreenState extends State<SplashScreen>
         statusBarIconBrightness: Brightness.dark,
         systemNavigationBarIconBrightness: Brightness.dark,
       ));
+      if (kReplayIntroFlow) {
+        await AppPrefs.instance.clearOnboardingComplete();
+      }
       final done = await AppPrefs.instance.isOnboardingComplete();
       if (!mounted) return;
       if (kSkipAuth && done) {
         await preparePostOnboardingSession();
         if (!mounted) return;
       }
+      final next = await AuthSession.resolveStartScreen(onboardingDone: done);
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) {
-            if (!done) return const OnboardingScreen();
-            return kSkipAuth ? const HomeScreen() : const LoginScreen();
-          },
+          pageBuilder: (_, __, ___) => next,
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
           transitionDuration: const Duration(milliseconds: 450),
@@ -293,7 +293,6 @@ class _FloatingLogoState extends State<_FloatingLogo>
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = widget.size * 0.52;
     final radius = widget.size * 0.28;
 
     return AnimatedBuilder(
@@ -306,11 +305,7 @@ class _FloatingLogoState extends State<_FloatingLogo>
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.primary, AppColors.electric],
-          ),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(radius),
           boxShadow: const [
             BoxShadow(
@@ -320,10 +315,13 @@ class _FloatingLogoState extends State<_FloatingLogo>
             ),
           ],
         ),
-        child: Icon(
-          Icons.sign_language_rounded,
-          size: iconSize,
-          color: Colors.white,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: EdgeInsets.all(widget.size * 0.10),
+          child: Image.asset(
+            'assets/images/logo_mark.png',
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

@@ -1,2 +1,5 @@
-/// Temporary flag — set to false when Firebase auth works on device.
-const bool kSkipAuth = true;
+/// Set to true only for local dev without Firebase sign-in.
+const bool kSkipAuth = false;
+
+/// Set to true to show splash → onboarding again on next launch (resets walkthrough).
+const bool kReplayIntroFlow = true;

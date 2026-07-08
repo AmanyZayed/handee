@@ -6,23 +6,52 @@ import '../theme/app_theme.dart';
 // The blue gradient rounded-square icon used throughout the app.
 
 class HdLogoMark extends StatelessWidget {
-  const HdLogoMark({super.key, this.size = 40, this.radius});
+  const HdLogoMark({
+    super.key,
+    this.size = 40,
+    this.radius,
+    this.bare = false,
+  });
 
   final double size;
   final double? radius;
 
+  /// When true, shows [logo_mark.png] directly — already a full app-icon tile.
+  final bool bare;
+
   @override
   Widget build(BuildContext context) {
     final r = radius ?? size * 0.30;
+
+    if (bare) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(r),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x3305347E),
+              blurRadius: 28,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset(
+          'assets/images/logo_mark.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.electric],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(r),
         boxShadow: const [
           BoxShadow(
@@ -32,75 +61,16 @@ class HdLogoMark extends StatelessWidget {
           ),
         ],
       ),
-      child: CustomPaint(
-        painter: _HandMarkPainter(),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.10),
+        child: Image.asset(
+          'assets/images/logo_mark.png',
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }
-}
-
-// Draws the HANDee hand-bar motif in white — matches the SVG in the design.
-class _HandMarkPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-
-    // Four vertical bars (fingers) — scaled from the SVG viewBox (0 0 34 34)
-    // Original bar positions in a 34×34 viewBox translated/scaled:
-    //   translate(6,2) scale(0.3) → effective origin offset + 0.3× scale
-    final rects = [
-      _bar(18, 22, 14, 40, w, h),
-      _bar(35, 14, 14, 48, w, h),
-      _bar(52, 18, 14, 44, w, h),
-      _bar(69, 26, 14, 36, w, h),
-    ];
-    for (final r in rects) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(r, Radius.circular(r.width / 2)),
-        paint,
-      );
-    }
-
-    // Thumb arc bar (rotate 40° around 9,62 in original)
-    // Approximate with a rounded rect then rotate
-    canvas.save();
-    final thumbRect = _bar(2, 56, 14, 32, w, h);
-    final thumbCenter = thumbRect.center;
-    canvas.translate(thumbCenter.dx, thumbCenter.dy);
-    canvas.rotate(40 * 3.14159 / 180);
-    canvas.translate(-thumbCenter.dx, -thumbCenter.dy);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(thumbRect, Radius.circular(thumbRect.width / 2)),
-      paint,
-    );
-    canvas.restore();
-
-    // Palm rounded rect
-    final palmRect = _bar(14, 50, 72, 36, w, h);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(palmRect, const Radius.circular(5.4)),
-      paint,
-    );
-  }
-
-  // Maps a bar from the SVG coordinate space (86×64 effective) to the canvas.
-  Rect _bar(double x, double y, double bw, double bh, double cw, double ch) {
-    // SVG origin after translate(6,2) scale(0.3): space is ~84×64 (orig 280×214 at 0.3)
-    const ox = 6.0, oy = 2.0, sc = 0.3;
-    final sx = (x * sc + ox) / 34.0 * cw;
-    final sy = (y * sc + oy) / 34.0 * ch;
-    final sw = bw * sc / 34.0 * cw;
-    final sh = bh * sc / 34.0 * ch;
-    return Rect.fromLTWH(sx, sy, sw, sh);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─── Inline home-screen app bar row ───────────────────────────────────────────

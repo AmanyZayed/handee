@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:handee/theme/app_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -11,7 +10,6 @@ import 'native_asl_bridge.dart';
 import 'tflite_asl_service.dart';
 import 'yolo_prediction_smoother.dart';
 import '../theme/app_theme.dart';
-
 class AslCameraScreen extends StatefulWidget {
   const AslCameraScreen({super.key, this.isTab = false});
 
@@ -49,7 +47,15 @@ class _PredictionProfileConfig {
 class _AslCameraScreenState extends State<AslCameraScreen> {
   static const int _maxSequenceFrames = 30;
   static const int _minFramesBeforePrediction = 1;
-  static const double _minPredictionConfidence = 0.70;
+  static const double _defaultMinPredictionConfidence = 0.70;
+  static const double _sentenceMinPredictionConfidence = 0.30;
+
+  double get _minPredictionConfidence {
+    if (_aiMode == AslAiMode.buildSentence) {
+      return _sentenceMinPredictionConfidence;
+    }
+    return _defaultMinPredictionConfidence;
+  }
 
   static const _PredictionProfile _predictionProfile = _PredictionProfile.balanced;
   static const Map<_PredictionProfile, _PredictionProfileConfig> _profileConfigs = {
@@ -113,14 +119,11 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
   AslAiMode _aiMode = AslAiMode.detect;
   String _composedText = '';
   String? _lastAcceptedLabel;
-  final FlutterTts _tts = FlutterTts();
 
   @override
   void initState() {
     super.initState();
     _profileConfig = _profileConfigs[_predictionProfile]!;
-    _tts.setLanguage('en-US');
-    _tts.setSpeechRate(0.45);
     _listenToNativeStream();
     _startSetup();
   }
@@ -141,8 +144,6 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
     } else if (mode == AslAiMode.buildWord) {
       await _onPipelineChanged(AslRecognitionPipeline.yoloFast);
       await _onYoloFilterChanged(AslYoloClassFilter.both);
-    } else if (mode == AslAiMode.signToSpeech) {
-      await _onPipelineChanged(AslRecognitionPipeline.words);
     }
   }
 
@@ -163,9 +164,6 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
         setState(() {
           _composedText = '$_composedText$label';
         });
-      case AslAiMode.signToSpeech:
-        setState(() => _composedText = label);
-        _tts.speak(label);
     }
   }
 
@@ -174,11 +172,6 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
       _composedText = '';
       _lastAcceptedLabel = null;
     });
-  }
-
-  Future<void> _speakComposed() async {
-    if (_composedText.trim().isEmpty) return;
-    await _tts.speak(_composedText.trim());
   }
 
   void _maybeAcceptFromWords() {
@@ -494,10 +487,15 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
         _candidateRepeatCount = 1;
       }
 
-      final canFastAccept =
-          prediction.confidence >= _profileConfig.fastAcceptConfidence;
-      final canStableAccept =
-          _candidateRepeatCount >= _profileConfig.requiredStableRepeats;
+      final fastAcceptThreshold = _aiMode == AslAiMode.buildSentence
+          ? _sentenceMinPredictionConfidence
+          : _profileConfig.fastAcceptConfidence;
+      final requiredRepeats = _aiMode == AslAiMode.buildSentence
+          ? 1
+          : _profileConfig.requiredStableRepeats;
+
+      final canFastAccept = prediction.confidence >= fastAcceptThreshold;
+      final canStableAccept = _candidateRepeatCount >= requiredRepeats;
       if (canFastAccept || canStableAccept) {
         final prev = _stableLabel;
         _stableLabel = prediction.label;
@@ -683,7 +681,6 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
     NativeAslBridge.stopRecognition();
     _skeletonLandmarks.dispose();
     _tfliteService.dispose();
-    _tts.stop();
     super.dispose();
   }
 
@@ -843,7 +840,6 @@ class _AslCameraScreenState extends State<AslCameraScreen> {
                         mode: _aiMode,
                         text: _composedText,
                         onClear: _clearComposed,
-                        onSpeak: _speakComposed,
                       ),
                     ),
                   _AiModeBar(
@@ -1306,13 +1302,11 @@ class _AiComposePanel extends StatelessWidget {
     required this.mode,
     required this.text,
     required this.onClear,
-    required this.onSpeak,
   });
 
   final AslAiMode mode;
   final String text;
   final VoidCallback onClear;
-  final VoidCallback onSpeak;
 
   @override
   Widget build(BuildContext context) {
@@ -1345,29 +1339,18 @@ class _AiComposePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              TextButton(
-                onPressed: onClear,
-                child: Text(
-                  'Clear',
-                  style: AppFonts.plusJakarta(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
-                  ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: onClear,
+              child: Text(
+                'Clear',
+                style: AppFonts.plusJakarta(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: text.trim().isEmpty ? null : onSpeak,
-                icon: const Icon(Icons.volume_up_rounded, size: 16),
-                label: const Text('Speak'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),

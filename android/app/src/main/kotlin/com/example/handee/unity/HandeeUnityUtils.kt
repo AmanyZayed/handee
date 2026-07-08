@@ -2,6 +2,7 @@ package com.example.handee.unity
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -16,38 +17,34 @@ object HandeeUnityUtils {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Scene GameObject that owns the ASLAnimator script.
+    private val signTargets = listOf(
+        "Hamada",
+    )
+
     var activity: Activity? = null
     var unityPlayer: HandeeUnityPlayer? = null
     var unityFrameLayout: FrameLayout? = null
 
-    /** Player instance exists (may still be loading scene). */
     var unityLoaded: Boolean = false
 
-    /** Scene is ready for UnitySendMessage (set after first attach + delay). */
     @Volatile
     var sceneReady: Boolean = false
 
-    var pendingMessage: Triple<String, String, String>? = null
-
-    private val legacyTargets = listOf(
-        "HamadaAvatar",
-        "Hamada",
-        "Avatar",
-        "ASLAnimator",
-    )
-
-    private fun dispatchSign(target: String, message: String) {
-        send(target, "ReceiveTextFromFlutter", message)
-        send(target, "PlayText", message)
-        // Some Unity builds read stored text when PlayText is called with no payload.
-        send(target, "PlayText", "")
+    /// Unity ships arm64 native libs only — x86/x86_64 emulators cannot load libmain.so.
+    fun isNativeRuntimeSupported(): Boolean {
+        val primary = Build.SUPPORTED_ABIS.firstOrNull() ?: return false
+        return primary == "arm64-v8a" || primary == "armeabi-v7a"
     }
+
+    private var pendingSignWord: String? = null
+    var pendingMessage: Triple<String, String, String>? = null
 
     private val attachListener = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(view: View) {
             scheduleSceneReady()
             prepareForMessage()
-            flushPendingMessage()
+            flushPending()
         }
 
         override fun onViewDetachedFromWindow(view: View) {}
@@ -62,7 +59,7 @@ object HandeeUnityUtils {
                 {
                     sceneReady = true
                     prepareForMessage()
-                    flushPendingMessage()
+                    flushPending()
                     Log.i(TAG, "sceneReady at ${delay}ms")
                 },
                 delay,
@@ -75,6 +72,11 @@ object HandeeUnityUtils {
         events: IUnityPlayerLifecycleEvents,
         onReady: () -> Unit,
     ) {
+        if (!isNativeRuntimeSupported()) {
+            Log.w(TAG, "Unity skipped: CPU ABI not supported on this device/emulator")
+            return
+        }
+
         val act = activity ?: return
 
         if (unityFrameLayout != null) {
@@ -96,10 +98,12 @@ object HandeeUnityUtils {
         }
     }
 
-    fun prepareForMessage() {
+    fun prepareForMessage(requestFocus: Boolean = false) {
         if (!unityLoaded || unityPlayer == null) return
         try {
-            unityFrameLayout?.requestFocus()
+            if (requestFocus) {
+                unityFrameLayout?.requestFocus()
+            }
             unityPlayer?.windowFocusChanged(true)
             unityPlayer?.resume()
         } catch (e: Exception) {
@@ -107,7 +111,29 @@ object HandeeUnityUtils {
         }
     }
 
+    fun playSignWord(word: String) {
+        val trimmed = word.trim().lowercase()
+        if (trimmed.isEmpty() || !isNativeRuntimeSupported()) return
+
+        if (!unityLoaded || unityPlayer == null || !sceneReady) {
+            pendingSignWord = trimmed
+            Log.w(TAG, "playSignWord queued: $trimmed")
+            return
+        }
+
+        dispatchSignWord(trimmed)
+    }
+
+    private fun dispatchSignWord(word: String) {
+        prepareForMessage(requestFocus = true)
+        for (target in signTargets) {
+            send(target, "ReceiveTextFromFlutter", word)
+        }
+    }
+
     fun postMessage(gameObject: String, methodName: String, message: String) {
+        if (!isNativeRuntimeSupported()) return
+
         if (!unityLoaded || unityPlayer == null) {
             pendingMessage = Triple(gameObject, methodName, message)
             Log.w(TAG, "postMessage queued (player not ready)")
@@ -121,36 +147,7 @@ object HandeeUnityUtils {
         }
 
         prepareForMessage()
-
         send(gameObject, methodName, message)
-
-        when (methodName) {
-            "PlaySign" -> {
-                for (target in legacyTargets) {
-                    dispatchSign(target, message)
-                }
-            }
-            "ReceiveTextFromFlutter" -> {
-                for (target in legacyTargets) {
-                    if (target != gameObject) {
-                        dispatchSign(target, message)
-                    } else {
-                        send(target, "PlayText", message)
-                        send(target, "PlayText", "")
-                    }
-                }
-            }
-            "PlayText" -> {
-                if (message.isNotEmpty()) {
-                    for (target in legacyTargets) {
-                        if (target != gameObject) {
-                            send(target, "ReceiveTextFromFlutter", message)
-                            send(target, "PlayText", message)
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private fun send(gameObject: String, methodName: String, message: String) {
@@ -160,6 +157,15 @@ object HandeeUnityUtils {
             Log.i(TAG, "UnitySendMessage -> $gameObject.$methodName(\"$message\")")
         } catch (e: Exception) {
             Log.e(TAG, "postMessage failed for $gameObject", e)
+        }
+    }
+
+    fun flushPending() {
+        flushPendingMessage()
+        val word = pendingSignWord
+        if (word != null && sceneReady && unityLoaded && unityPlayer != null) {
+            pendingSignWord = null
+            dispatchSignWord(word)
         }
     }
 
@@ -187,7 +193,7 @@ object HandeeUnityUtils {
     }
 
     fun focus() {
-        prepareForMessage()
+        prepareForMessage(requestFocus = true)
     }
 
     fun addUnityViewToGroup(group: ViewGroup) {
@@ -206,6 +212,6 @@ object HandeeUnityUtils {
     }
 
     fun refocus() {
-        prepareForMessage()
+        prepareForMessage(requestFocus = true)
     }
 }

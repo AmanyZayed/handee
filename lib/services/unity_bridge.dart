@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../unity/unity_config.dart';
 import '../unity/unity_widget_controller.dart';
 
 /// Sends words to Unity via [UnityWidgetController].
@@ -14,10 +13,25 @@ class UnityBridge {
 
   static bool get isSupported => !kIsWeb && Platform.isAndroid;
 
+  static bool? _nativeRuntimeSupported;
+
+  /// True on ARM phones; false on x86/x86_64 emulators (Unity libs are arm64-only).
+  static Future<bool> isNativeRuntimeSupported() async {
+    if (!isSupported) return false;
+    if (_nativeRuntimeSupported != null) return _nativeRuntimeSupported!;
+    try {
+      final ok = await _channel.invokeMethod<bool>('isNativeSupported');
+      _nativeRuntimeSupported = ok == true;
+    } catch (_) {
+      _nativeRuntimeSupported = false;
+    }
+    return _nativeRuntimeSupported!;
+  }
+
   static UnityWidgetController? get controller => UnityWidgetController.instance;
 
   static Future<bool> waitUntilReady({
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 12),
   }) async {
     if (!isSupported) return false;
     final deadline = DateTime.now().add(timeout);
@@ -43,42 +57,35 @@ class UnityBridge {
     } catch (_) {}
   }
 
-  /// Dispatch sign playback to every known Unity avatar object.
   static Future<bool> playSign(String text) async {
     if (!isSupported) return false;
+    if (!await isNativeRuntimeSupported()) return false;
     final trimmed = text.trim().toLowerCase();
     if (trimmed.isEmpty) return false;
 
     final ready = await waitUntilReady();
-    final unity = UnityWidgetController.instance;
-    if (!ready || unity == null) {
+    if (!ready || UnityWidgetController.instance == null) {
       debugPrint('Unity controller not ready');
       return false;
     }
 
     await prepare();
 
-    for (final target in UnityConfig.legacyGameObjects) {
-      await unity.postMessage(target, UnityConfig.receiveMethod, trimmed);
-      await unity.postMessage(target, UnityConfig.playTextMethod, trimmed);
-      // Some Unity builds only animate after PlayText with an empty arg.
-      await unity.postMessage(target, UnityConfig.playTextMethod, '');
+    // The scene object holding the ASLAnimator script is named "Hamada".
+    // Its ReceiveTextFromFlutter handles full phrases and fingerspells
+    // unknown words, so the whole text goes in one message.
+    try {
+      await _channel.invokeMethod<void>('playSign', {'word': trimmed});
+      return true;
+    } catch (e) {
+      debugPrint('Unity playSign failed: $e');
+      return false;
     }
-
-    await unity.postMessage(
-      UnityConfig.gameObject,
-      UnityConfig.playMethod,
-      trimmed,
-    );
-
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    await prepare();
-    await unity.postMessage(UnityConfig.gameObject, UnityConfig.playMethod, trimmed);
-    return true;
   }
 
   static Future<bool> openSignScreen(String text) async {
     if (!isSupported) return false;
+    if (!await isNativeRuntimeSupported()) return false;
     final trimmed = text.trim().toLowerCase();
     if (trimmed.isEmpty) return false;
 

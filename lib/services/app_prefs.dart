@@ -9,14 +9,13 @@ class AppPrefs {
   /// Notifies when large-text preference changes (for [MaterialApp] rebuild).
   static final ValueNotifier<bool> largeTextNotifier = ValueNotifier(false);
 
+  /// Bumps when translation history changes (home recent chips listen).
+  static final ValueNotifier<int> historyRevision = ValueNotifier(0);
+
+  static void _bumpHistory() => historyRevision.value++;
+
   static const _onboardingKey = 'onboarding_complete';
-  static const _signsLearnedKey = 'signs_learned';
-  static const _dayStreakKey = 'day_streak';
   static const _translationsKey = 'translations_count';
-  static const _lastActiveDayKey = 'last_active_day';
-  static const _masteredSignsKey = 'mastered_signs';
-  static const _dailySignsKey = 'daily_signs_today';
-  static const _dailySignsDayKey = 'daily_signs_day';
   static const _historyKey = 'translation_history_v1';
   static const _notificationsKey = 'notifications_enabled';
   static const _largeTextKey = 'large_text_enabled';
@@ -31,14 +30,9 @@ class AppPrefs {
     await p.setBool(_onboardingKey, true);
   }
 
-  Future<int> signsLearned() async {
+  Future<void> clearOnboardingComplete() async {
     final p = await SharedPreferences.getInstance();
-    return p.getInt(_signsLearnedKey) ?? 0;
-  }
-
-  Future<int> dayStreak() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getInt(_dayStreakKey) ?? 0;
+    await p.remove(_onboardingKey);
   }
 
   Future<int> translationsCount() async {
@@ -49,19 +43,40 @@ class AppPrefs {
   Future<void> recordTranslation([String? text]) async {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_translationsKey, (p.getInt(_translationsKey) ?? 0) + 1);
-    await _touchStreak(p);
     if (text != null && text.trim().isNotEmpty) {
       await _appendHistory(p, text.trim());
+      _bumpHistory();
     }
   }
 
   Future<void> _appendHistory(SharedPreferences p, String text) async {
     final raw = p.getStringList(_historyKey) ?? [];
+    final lower = text.toLowerCase();
+    raw.removeWhere((line) {
+      final sep = line.indexOf('|');
+      if (sep < 0) return false;
+      return line.substring(sep + 1).toLowerCase() == lower;
+    });
     raw.insert(0, '${DateTime.now().millisecondsSinceEpoch}|$text');
     while (raw.length > 100) {
       raw.removeLast();
     }
     await p.setStringList(_historyKey, raw);
+  }
+
+  /// Unique recent words for the home screen chips (newest first).
+  Future<List<String>> recentWords({int limit = 8}) async {
+    final items = await translationHistory();
+    final seen = <String>{};
+    final words = <String>[];
+    for (final item in items) {
+      final key = item.text.toLowerCase();
+      if (seen.add(key)) {
+        words.add(item.text);
+        if (words.length >= limit) break;
+      }
+    }
+    return words;
   }
 
   Future<List<TranslationHistoryItem>> translationHistory() async {
@@ -81,37 +96,19 @@ class AppPrefs {
     return items;
   }
 
+  Future<void> removeTranslationHistoryItem(TranslationHistoryItem item) async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getStringList(_historyKey) ?? [];
+    final target = '${item.at.millisecondsSinceEpoch}|${item.text}';
+    raw.remove(target);
+    await p.setStringList(_historyKey, raw);
+    _bumpHistory();
+  }
+
   Future<void> clearTranslationHistory() async {
     final p = await SharedPreferences.getInstance();
     await p.remove(_historyKey);
-  }
-
-  Future<void> recordSignLearned(String sign) async {
-    final p = await SharedPreferences.getInstance();
-    final raw = p.getStringList(_masteredSignsKey) ?? [];
-    if (!raw.contains(sign)) {
-      raw.add(sign);
-      await p.setStringList(_masteredSignsKey, raw);
-      await p.setInt(_signsLearnedKey, raw.length);
-    }
-    final today = _dayKey(DateTime.now());
-    if (p.getString(_dailySignsDayKey) != today) {
-      await p.setStringList(_dailySignsKey, []);
-      await p.setString(_dailySignsDayKey, today);
-    }
-    final daily = p.getStringList(_dailySignsKey) ?? [];
-    if (!daily.contains(sign)) {
-      daily.add(sign);
-      await p.setStringList(_dailySignsKey, daily);
-    }
-    await _touchStreak(p);
-  }
-
-  Future<int> dailyPracticeProgress() async {
-    final p = await SharedPreferences.getInstance();
-    final today = _dayKey(DateTime.now());
-    if (p.getString(_dailySignsDayKey) != today) return 0;
-    return (p.getStringList(_dailySignsKey) ?? []).length.clamp(0, 10);
+    _bumpHistory();
   }
 
   Future<bool> storeNotifyEnabled() async {
@@ -149,22 +146,6 @@ class AppPrefs {
     largeTextNotifier.value = v;
   }
 
-  Future<void> _touchStreak(SharedPreferences p) async {
-    final today = _dayKey(DateTime.now());
-    final last = p.getString(_lastActiveDayKey);
-    var streak = p.getInt(_dayStreakKey) ?? 0;
-    if (last == today) return;
-    if (last == _dayKey(DateTime.now().subtract(const Duration(days: 1)))) {
-      streak += 1;
-    } else {
-      streak = 1;
-    }
-    await p.setString(_lastActiveDayKey, today);
-    await p.setInt(_dayStreakKey, streak);
-  }
-
-  String _dayKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 class TranslationHistoryItem {

@@ -15,7 +15,6 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
   final FlutterTts _tts = FlutterTts();
   bool _isSpeaking = false;
   double _speechRate = 0.45;
-  double _pitch = 1.0;
 
   @override
   void initState() {
@@ -23,6 +22,7 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
     _tts.setStartHandler(() => setState(() => _isSpeaking = true));
     _tts.setCompletionHandler(() => setState(() => _isSpeaking = false));
     _tts.setCancelHandler(() => setState(() => _isSpeaking = false));
+    _tts.setLanguage('en-US');
   }
 
   Future<void> _speak() async {
@@ -30,7 +30,6 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
     if (text.isEmpty) return;
     await _tts.setLanguage('en-US');
     await _tts.setSpeechRate(_speechRate);
-    await _tts.setPitch(_pitch);
     await _tts.speak(text);
   }
 
@@ -50,6 +49,7 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
@@ -68,12 +68,16 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          24 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Text input card
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -143,10 +147,7 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 18),
-
-            // Settings card
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -154,44 +155,17 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Voice Settings',
-                    style: AppFonts.plusJakarta(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _SliderRow(
-                    icon: Icons.speed_rounded,
-                    label: 'Speed',
-                    value: _speechRate,
-                    min: 0.1,
-                    max: 1.0,
-                    displayValue: _speechRate.toStringAsFixed(2),
-                    onChanged: (v) => setState(() => _speechRate = v),
-                  ),
-                  const SizedBox(height: 12),
-                  _SliderRow(
-                    icon: Icons.tune_rounded,
-                    label: 'Pitch',
-                    value: _pitch,
-                    min: 0.5,
-                    max: 2.0,
-                    displayValue: _pitch.toStringAsFixed(1),
-                    onChanged: (v) => setState(() => _pitch = v),
-                  ),
-                ],
+              child: _SliderRow(
+                icon: Icons.speed_rounded,
+                label: 'Speed',
+                value: _speechRate,
+                min: 0.1,
+                max: 1.0,
+                displayValue: _speechRate.toStringAsFixed(2),
+                onChanged: (v) => setState(() => _speechRate = v),
               ),
             ),
-
-            const Spacer(),
-
-            // Speak button
+            const SizedBox(height: 24),
             GestureDetector(
               onTap: _isSpeaking ? null : _speak,
               child: AnimatedOpacity(
@@ -227,10 +201,7 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Stop button
             GestureDetector(
               onTap: _isSpeaking ? _stop : null,
               child: AnimatedOpacity(
@@ -270,8 +241,6 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                 ),
               ),
             ),
-
-            const SizedBox(height: 24),
           ],
         ),
       ),

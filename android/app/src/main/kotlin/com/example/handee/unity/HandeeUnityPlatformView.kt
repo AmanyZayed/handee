@@ -2,10 +2,11 @@ package com.example.handee.unity
 
 import android.content.Context
 import android.graphics.Color
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
+import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
+import android.widget.TextView
 import com.unity3d.player.IUnityPlayerLifecycleEvents
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -28,11 +29,31 @@ class HandeeUnityPlatformView(
         frameLayout.setBackgroundColor(Color.TRANSPARENT)
         channel.setMethodCallHandler(this)
 
-        if (HandeeUnityUtils.unityPlayer == null) {
+        if (!HandeeUnityUtils.isNativeRuntimeSupported()) {
+            showUnsupportedPlaceholder()
+        } else if (HandeeUnityUtils.unityPlayer == null) {
             HandeeUnityUtils.createUnityPlayer(this) { attachToView() }
         } else {
             attachToView()
         }
+    }
+
+    private fun showUnsupportedPlaceholder() {
+        val label = TextView(frameLayout.context).apply {
+            text = "3D avatar needs a physical Android phone\n(ARM device — not x86 emulator)"
+            setTextColor(Color.argb(210, 255, 255, 255))
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setPadding(24, 24, 24, 24)
+        }
+        frameLayout.addView(
+            label,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            ),
+        )
     }
 
     private fun attachToView() {

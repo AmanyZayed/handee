@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:handee/theme/app_fonts.dart';
 
 import '../config/app_config.dart';
-import '../home/home_screen.dart';
-import '../profile/login_screen.dart';
 import '../services/app_prefs.dart';
+import '../services/auth_session.dart';
 import '../services/guest_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/hd_app_bar.dart';
 import '../widgets/hd_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -25,7 +25,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'Speak it. Sign it.',
       subtitle:
           'Turn your voice or text into clear sign language with a friendly 3D avatar.',
-      icon: Icons.sign_language_rounded,
       bubbles: ['Hello', 'Thank you'],
       dark: false,
     ),
@@ -33,17 +32,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'Point. Recognize.',
       subtitle:
           'Aim your camera and HANDee reads ASL signs into words in real time.',
-      icon: Icons.camera_alt_outlined,
       badge: 'Reading sign…',
       dark: true,
-    ),
-    _OnboardData(
-      title: 'Learn every day.',
-      subtitle:
-          'Master the alphabet, numbers and everyday signs — at your own pace.',
-      icon: Icons.school_outlined,
-      tiles: ['A', 'B', '7'],
-      dark: false,
     ),
   ];
 
@@ -52,11 +42,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!mounted) return;
     if (kSkipAuth) await preparePostOnboardingSession();
     if (!mounted) return;
+    final next = await AuthSession.resolveStartScreen(onboardingDone: true);
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) =>
-            kSkipAuth ? const HomeScreen() : const LoginScreen(),
+        pageBuilder: (_, __, ___) => next,
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 400),
@@ -90,18 +81,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _finish,
-                child: Text(
-                  'Skip',
-                  style: AppFonts.plusJakarta(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 4, 10, 0),
+              child: Row(
+                children: [
+                  const HdLogoMark(size: 40, radius: 12, bare: true),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _finish,
+                    child: Text(
+                      'Skip',
+                      style: AppFonts.plusJakarta(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             Expanded(
@@ -136,19 +133,15 @@ class _OnboardData {
   const _OnboardData({
     required this.title,
     required this.subtitle,
-    required this.icon,
     this.bubbles,
     this.badge,
-    this.tiles,
     this.dark = false,
   });
 
   final String title;
   final String subtitle;
-  final IconData icon;
   final List<String>? bubbles;
   final String? badge;
-  final List<String>? tiles;
   final bool dark;
 }
 
@@ -199,6 +192,8 @@ class _Visual extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context).width * 0.62;
+    final logoSize = size * 0.55;
+    final logoRadius = logoSize * 0.22;
 
     if (data.dark) {
       return Container(
@@ -214,7 +209,7 @@ class _Visual extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(data.icon, size: 64, color: Colors.white.withValues(alpha: 0.85)),
+            HdLogoMark(size: logoSize, radius: logoRadius, bare: true),
             if (data.badge != null)
               Positioned(
                 top: 20,
@@ -240,46 +235,6 @@ class _Visual extends StatelessWidget {
       );
     }
 
-    if (data.tiles != null) {
-      return SizedBox(
-        height: size * 0.7,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: data.tiles!.asMap().entries.map((e) {
-            final offset = e.key == 1 ? -12.0 : 0.0;
-            return Transform.translate(
-              offset: Offset(0, offset),
-              child: Container(
-                width: 72,
-                height: 72,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  gradient: e.key == 1
-                      ? const LinearGradient(
-                          colors: [AppColors.primary, AppColors.electric],
-                        )
-                      : null,
-                  color: e.key == 1 ? null : AppColors.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppShadow.sm,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  e.value,
-                  style: AppFonts.spaceGrotesk(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: e.key == 1 ? Colors.white : AppColors.primary,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
     return Column(
       children: [
         if (data.bubbles != null)
@@ -299,18 +254,7 @@ class _Visual extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 16),
-        Container(
-          width: size * 0.55,
-          height: size * 0.55,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.electric],
-            ),
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: AppShadow.button,
-          ),
-          child: Icon(data.icon, size: 56, color: Colors.white),
-        ),
+        HdLogoMark(size: logoSize, radius: logoRadius, bare: true),
         const SizedBox(height: 16),
         if (data.bubbles != null && data.bubbles!.length > 1)
           Container(

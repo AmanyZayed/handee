@@ -15,7 +15,9 @@ object HandeeUnityRegistrar {
     }
 
     fun onResume() {
-        HandeeUnityUtils.resume()
-        HandeeUnityUtils.refocus()
+        if (HandeeUnityUtils.isNativeRuntimeSupported()) {
+            HandeeUnityUtils.resume()
+            HandeeUnityUtils.refocus()
+        }
     }
 }

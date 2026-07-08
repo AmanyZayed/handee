@@ -287,13 +287,6 @@ class _StorePageState extends State<StorePage> {
       badge: null,
       badgeColor: null,
     ),
-    _FeaturePack(
-      icon: Icons.analytics_rounded,
-      title: 'Learning Analytics',
-      description: 'Track progress, streaks, and mastered signs',
-      badge: 'New',
-      badgeColor: AppColors.success,
-    ),
   ];
 }
 

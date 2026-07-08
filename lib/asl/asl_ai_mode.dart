@@ -3,7 +3,6 @@ enum AslAiMode {
   detect,
   buildSentence,
   buildWord,
-  signToSpeech,
 }
 
 extension AslAiModeLabel on AslAiMode {
@@ -15,8 +14,6 @@ extension AslAiModeLabel on AslAiMode {
         return 'Sentence';
       case AslAiMode.buildWord:
         return 'Word';
-      case AslAiMode.signToSpeech:
-        return 'Speak';
     }
   }
 
@@ -28,8 +25,6 @@ extension AslAiModeLabel on AslAiMode {
         return 'Sign words — builds a sentence';
       case AslAiMode.buildWord:
         return 'Spell letters — builds a word';
-      case AslAiMode.signToSpeech:
-        return 'Speaks each detected sign';
     }
   }
 }

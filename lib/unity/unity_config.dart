@@ -5,7 +5,8 @@ class UnityConfig {
   /// Root avatar object in the exported ASL scene.
   static const gameObject = 'HamadaAvatar';
 
-  static const playMethod = 'PlaySign';
+  /// avatar_final4 uses PlayText (no PlaySign on ASLAnimator).
+  static const playMethod = 'PlayText';
   static const receiveMethod = 'ReceiveTextFromFlutter';
   static const playTextMethod = 'PlayText';
 

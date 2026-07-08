@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../pages/history_page.dart';
 import '../pages/speech_to_text_page.dart';
-import '../pages/store_page.dart';
 import '../pages/text_to_speech_page.dart';
 import '../services/app_prefs.dart';
 import '../theme/app_theme.dart';
@@ -31,9 +30,6 @@ class ProfileDetailsWidget extends StatefulWidget {
 class _ProfileDetailsWidgetState extends State<ProfileDetailsWidget> {
   bool _notificationsEnabled = true;
   bool _largeText = false;
-  int _signsLearned = 0;
-  int _dayStreak = 0;
-  int _translations = 0;
 
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _emailCtrl;
@@ -50,16 +46,10 @@ class _ProfileDetailsWidgetState extends State<ProfileDetailsWidget> {
     final prefs = AppPrefs.instance;
     final n = await prefs.notificationsEnabled();
     final l = await prefs.largeTextEnabled();
-    final s = await prefs.signsLearned();
-    final d = await prefs.dayStreak();
-    final t = await prefs.translationsCount();
     if (!mounted) return;
     setState(() {
       _notificationsEnabled = n;
       _largeText = l;
-      _signsLearned = s;
-      _dayStreak = d;
-      _translations = t;
     });
   }
 
@@ -198,109 +188,7 @@ class _ProfileDetailsWidgetState extends State<ProfileDetailsWidget> {
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 22),
-
-                        // Stats row
-                        Row(
-                          children: [
-                            _StatChip(value: '$_signsLearned', label: 'Signs learned'),
-                            const SizedBox(width: 10),
-                            _StatChip(value: '${_dayStreak}🔥', label: 'Day streak'),
-                            const SizedBox(width: 10),
-                            _StatChip(value: '$_translations', label: 'Translations'),
-                          ],
-                        ),
                       ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Premium card ──────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0B1030), Color(0xFF1A2350)],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x4D0B1030),
-                    blurRadius: 30,
-                    offset: Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.cyan, AppColors.primary],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.workspace_premium_rounded,
-                        color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Go Premium',
-                          style: AppFonts.plusJakarta(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Offline mode · 500+ signs',
-                          style: AppFonts.plusJakarta(
-                            fontSize: 12,
-                            color: const Color(0xFF9DB0E8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 9),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: InkWell(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const StorePage()),
-                      ),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          'Upgrade',
-                          style: AppFonts.plusJakarta(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.royalNavy,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -521,51 +409,6 @@ class _ProfileDetailsWidgetState extends State<ProfileDetailsWidget> {
             child: const Text('Log out'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Stat chip (in profile cover)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.value, required this.label});
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: AppFonts.spaceGrotesk(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: AppFonts.plusJakarta(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFFD6E1FF),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

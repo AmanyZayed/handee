@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:handee/theme/app_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/auth_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/hd_app_bar.dart';
 import 'auth_widgets.dart';
 import 'sign_up_widget.dart';
 
 class LoginWidget extends StatefulWidget {
   final Future<void> Function(User user) onLogin;
   final VoidCallback? onCreateAccount;
+  final VoidCallback? onContinueAsGuest;
   final bool embedded;
 
   const LoginWidget({
     super.key,
     required this.onLogin,
     this.onCreateAccount,
+    this.onContinueAsGuest,
     this.embedded = false,
   });
 
@@ -28,6 +33,20 @@ class _LoginWidgetState extends State<LoginWidget> {
   bool _obscure = true;
   bool _loading = false;
   bool _googleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPendingEmail();
+  }
+
+  Future<void> _loadPendingEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = prefs.getString(AuthSession.pendingLoginEmailKey);
+    if (pending == null || pending.isEmpty || !mounted) return;
+    _emailCtrl.text = pending;
+    await prefs.remove(AuthSession.pendingLoginEmailKey);
+  }
 
   Future<void> _login() async {
     final email = _emailCtrl.text.trim();
@@ -139,24 +158,10 @@ class _LoginWidgetState extends State<LoginWidget> {
         children: [
           if (!widget.embedded) const SizedBox(height: 64),
 
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primary, AppColors.electric],
-                  ),
-                  borderRadius: BorderRadius.circular(17),
-                  boxShadow: AppShadow.button,
-                ),
-                child: const Icon(
-                  Icons.sign_language_rounded,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: HdLogoMark(size: 58, radius: 17),
+          ),
 
               const SizedBox(height: 26),
 
@@ -267,6 +272,19 @@ class _LoginWidgetState extends State<LoginWidget> {
                   color: Color(0xFF4285F4),
                 ),
               ),
+
+              if (widget.onContinueAsGuest != null) ...[
+                const SizedBox(height: 12),
+                AuthOutlineButton(
+                  label: 'Continue as a guest',
+                  onTap: busy ? null : widget.onContinueAsGuest,
+                  leading: const Icon(
+                    Icons.person_outline_rounded,
+                    size: 20,
+                    color: AppColors.textSubtle,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 32),
 

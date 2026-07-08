@@ -171,7 +171,15 @@ class _HistoryPageState extends State<HistoryPage> {
                 delegate: SliverChildBuilderDelegate(
                   (_, i) {
                     final item = filtered[i];
-                    return _HistoryTile(item: item);
+                    return _HistoryTile(
+                      item: item,
+                      onTap: () => Navigator.pop(context, item.text),
+                      onDelete: () async {
+                        await AppPrefs.instance
+                            .removeTranslationHistoryItem(item);
+                        await _load();
+                      },
+                    );
                   },
                   childCount: filtered.length,
                 ),
@@ -184,8 +192,15 @@ class _HistoryPageState extends State<HistoryPage> {
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.item});
+  const _HistoryTile({
+    required this.item,
+    required this.onTap,
+    required this.onDelete,
+  });
+
   final TranslationHistoryItem item;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   String _formatTime(DateTime at) {
     final now = DateTime.now();
@@ -199,7 +214,9 @@ class _HistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -245,7 +262,14 @@ class _HistoryTile extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded,
+                size: 18, color: AppColors.textHint),
+            onPressed: onDelete,
+            tooltip: 'Remove',
+          ),
         ],
+      ),
       ),
     );
   }

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
-import '../services/guest_session.dart';
 import '../services/auth_service.dart';
+import '../services/auth_session.dart';
+import '../services/guest_session.dart';
 import '../theme/app_theme.dart';
 import 'login_widget.dart';
 import 'profile_details_widget.dart';
@@ -17,9 +18,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _isLoggedIn = false;
+  bool _isLoggedIn = kSkipAuth;
   String _email = '';
-  String _username = '';
+  String _username = kSkipAuth ? 'Guest' : '';
   String _mobile = '';
 
   @override
@@ -49,6 +50,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    if (await isGuestSession()) {
+      if (!mounted) return;
+      setState(() {
+        _isLoggedIn = true;
+        _email = '';
+        _username = prefs.getString('username') ?? 'Guest';
+        _mobile = '';
+      });
+      return;
+    }
+
     if (!mounted) return;
     setState(() {
       _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
@@ -62,21 +74,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     User user, {
     SharedPreferences? prefs,
   }) async {
+    await AuthSession.persistUser(user);
     final storage = prefs ?? await SharedPreferences.getInstance();
-    final email = user.email ?? storage.getString('registeredEmail') ?? '';
-    final username = user.displayName?.trim().isNotEmpty == true
-        ? user.displayName!.trim()
-        : (storage.getString('username') ?? email.split('@').first);
-
-    await storage.setBool('isLoggedIn', true);
-    if (email.isNotEmpty) await storage.setString('registeredEmail', email);
-    if (username.isNotEmpty) await storage.setString('username', username);
 
     if (!mounted) return;
     setState(() {
       _isLoggedIn = true;
-      _email = email;
-      _username = username;
+      _email = user.email ?? storage.getString('registeredEmail') ?? '';
+      _username = user.displayName?.trim().isNotEmpty == true
+          ? user.displayName!.trim()
+          : (storage.getString('username') ?? _email.split('@').first);
       _mobile = storage.getString('mobile') ?? '';
     });
   }
@@ -85,7 +92,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _onLogout() async {
     if (kSkipAuth) {
-      await ensureGuestSession();
       if (!mounted) return;
       setState(() {
         _isLoggedIn = true;
@@ -94,8 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     await AuthService.instance.signOut();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await AuthSession.clearSession();
     if (!mounted) return;
     setState(() {
       _isLoggedIn = false;
@@ -120,6 +125,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : LoginWidget(
                 embedded: true,
                 onLogin: _onLogin,
+                onContinueAsGuest: () async {
+                  await startGuestSession();
+                  if (!mounted) return;
+                  await _loadState();
+                },
                 onCreateAccount: () {
                   Navigator.push(
                     context,
